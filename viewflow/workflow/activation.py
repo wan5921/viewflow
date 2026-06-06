@@ -200,7 +200,6 @@ class Activation:
             flow_task=flow_task,
             token=token,
         )
-        print(f"[create_task] token={token}, owner_process_id={task.process_id}")
         task.data = data if data is not None else {}
         task.seed = seed
         task.save()
