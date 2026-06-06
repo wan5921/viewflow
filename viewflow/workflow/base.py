@@ -264,8 +264,21 @@ class Flow(Viewset, metaclass=FlowMetaClass):
     process_description: str = ""
     process_summary_template: str = ""
     process_result_template: str = ""
+    version: int = 1
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
+    def __new__(cls, *args, version: int = None, **kwargs):
+        if version is not None and version != getattr(cls, 'version', 1):
+            new_cls_name = f"{cls.__name__}V{version}"
+            new_cls = type(new_cls_name, (cls,), {'version': version})
+            return object.__new__(new_cls)
+        return object.__new__(cls)
+
+    def __init__(self, version: int = None, **kwargs: Any):
+        if version is not None:
+            self.version = version
+        super().__init__(**kwargs)
+
+    def __init_subclass__(cls, version: int = None, **kwargs: Any) -> None:
         """
         Create a new node instance.
 
@@ -273,6 +286,8 @@ class Flow(Viewset, metaclass=FlowMetaClass):
         :type activation_class: class
         :param kwargs: Additional keyword arguments to pass to the superclass.
         """
+        if version is not None:
+            cls.version = version
         super().__init_subclass__(**kwargs)
         cls.instance = LazySingletonDescriptor()
 

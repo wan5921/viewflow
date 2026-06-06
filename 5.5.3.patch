@@ -1,0 +1,177 @@
+diff --git a/viewflow/management/__init__.py b/viewflow/management/__init__.py
+index de2fed4..e69de29 100644
+--- a/viewflow/management/__init__.py
++++ b/viewflow/management/__init__.py
+@@ -1,97 +0,0 @@
+-"""Import flows before auth permission setup."""
+-
+-# Copyright (c) 2017-2020, Mikhail Podgurskiy
+-# All Rights Reserved.
+-
+-# This work is dual-licensed under AGPL defined in file 'LICENSE' with
+-# LICENSE_EXCEPTION and the Commercial licence defined in file 'COMM_LICENSE',
+-# which is part of this source code package.
+-
+-import os
+-import warnings
+-
+-from django.apps import apps
+-from django.db import DEFAULT_DB_ALIAS, IntegrityError, router
+-from django.db.models.signals import pre_migrate, post_migrate
+-
+-
+-def create_permissions(
+-    app_config, verbosity=2, interactive=True, using=DEFAULT_DB_ALIAS, **kwargs
+-):
+-    """Create permissions on django 1.10+."""
+-    if not app_config.models_module:
+-        return
+-
+-    try:
+-        ContentType = apps.get_model("contenttypes", "ContentType")
+-        Permission = apps.get_model("auth", "Permission")
+-    except LookupError:
+-        return
+-
+-    if not router.allow_migrate_model(using, Permission):
+-        return
+-
+-    searched_perms = list()  # (content_type, (codename, name))
+-    ctypes = set()  # The codenames and ctypes that should exist.
+-
+-    for klass in app_config.get_models():
+-        # ctype = ContentType.objects.db_manager(using).get_for_model(klass)
+-        opts = klass._meta
+-        ctype, _ = ContentType.objects.get_or_create(
+-            app_label=opts.app_label, model=opts.object_name.lower()
+-        )
+-        ctypes.add(ctype)
+-
+-        from django.contrib.auth.management import _get_all_permissions
+-
+-        for perm in _get_all_permissions(klass._meta):
+-            searched_perms.append((ctype, perm))
+-
+-    all_perms = set(
+-        Permission.objects.using(using)
+-        .filter(
+-            content_type__in=ctypes,
+-        )
+-        .values_list("content_type", "codename")
+-    )
+-
+-    perms = [
+-        Permission(codename=codename, name=name, content_type=ct)
+-        for ct, (codename, name) in searched_perms
+-        if (ct.pk, codename) not in all_perms
+-    ]
+-
+-    try:
+-        Permission.objects.using(using).bulk_create(perms)
+-    except IntegrityError as e:
+-        warnings.warn(
+-            f"Unable to create permissions for Viewflow models: {e}\n\n"
+-            "This is usually caused by having multiple databases configured. "
+-            "Be sure to account for the Permission model in your database routers. "
+-            "See Django's documentation on multiple databases for more information:\n"
+-            "https://docs.djangoproject.com/en/stable/topics/db/multi-db/#allow_migrate"
+-        )
+-        raise
+-
+-    if verbosity >= 2:
+-        for perm in perms:
+-            print("Adding permission '%s'" % perm)
+-
+-
+-def import_flows(app_config, **kwargs):
+-    """Pre-import flows to allow permissions auto-creation."""
+-    try:
+-        __import__("{}.flows".format(app_config.module.__name__))
+-    except ImportError as err:
+-        if os.path.exists(os.path.join(app_config.path, "flows.py")):
+-            warnings.warn(
+-                f"'{err}' during import flows.py for {app_config.name}\n\n"
+-                "Flow nodes custom permissions might not autocreated",
+-                stacklevel=2,
+-            )
+-
+-
+-pre_migrate.connect(import_flows, dispatch_uid="viewflow.management.import_flows")
+-post_migrate.connect(
+-    create_permissions, dispatch_uid="viewflow.management.create_permissions"
+-)
+diff --git a/viewflow/workflow/base.py b/viewflow/workflow/base.py
+index 5b4f453..934f51f 100644
+--- a/viewflow/workflow/base.py
++++ b/viewflow/workflow/base.py
+@@ -264,8 +264,21 @@ class Flow(Viewset, metaclass=FlowMetaClass):
+     process_description: str = ""
+     process_summary_template: str = ""
+     process_result_template: str = ""
++    version: int = 1
+ 
+-    def __init_subclass__(cls, **kwargs: Any) -> None:
++    def __new__(cls, *args, version: int = None, **kwargs):
++        if version is not None and version != getattr(cls, 'version', 1):
++            new_cls_name = f"{cls.__name__}V{version}"
++            new_cls = type(new_cls_name, (cls,), {'version': version})
++            return object.__new__(new_cls)
++        return object.__new__(cls)
++
++    def __init__(self, version: int = None, **kwargs: Any):
++        if version is not None:
++            self.version = version
++        super().__init__(**kwargs)
++
++    def __init_subclass__(cls, version: int = None, **kwargs: Any) -> None:
+         """
+         Create a new node instance.
+ 
+@@ -273,6 +286,8 @@ class Flow(Viewset, metaclass=FlowMetaClass):
+         :type activation_class: class
+         :param kwargs: Additional keyword arguments to pass to the superclass.
+         """
++        if version is not None:
++            cls.version = version
+         super().__init_subclass__(**kwargs)
+         cls.instance = LazySingletonDescriptor()
+ 
+diff --git a/viewflow/workflow/flow/views/filters.py b/viewflow/workflow/flow/views/filters.py
+index 7bbffff..6b815f2 100644
+--- a/viewflow/workflow/flow/views/filters.py
++++ b/viewflow/workflow/flow/views/filters.py
+@@ -96,7 +96,8 @@ class DashboardTaskListViewFilter(FilterSet):
+ class DashboardProcessListViewFilter(FilterSet):
+     created = DateRangeFilter()
+     finished = NullDateRangeFilter()
++    version = ChoiceFilter()
+ 
+     class Meta:
+         model = Process
+-        fields = ["status", "created", "finished"]
++        fields = ["status", "version", "created", "finished"]
+diff --git a/viewflow/workflow/models.py b/viewflow/workflow/models.py
+index 591390a..6e147e8 100644
+--- a/viewflow/workflow/models.py
++++ b/viewflow/workflow/models.py
+@@ -20,6 +20,7 @@ class AbstractProcess(models.Model):
+     """Base class for Process data object."""
+ 
+     flow_class = FlowReferenceField(_("Flow"))
++    version = models.IntegerField(_("Version"), default=1)
+     status = models.CharField(
+         _("Status"),
+         choices=status.PROCESS.choices,
+diff --git a/viewflow/workflow/nodes/start.py b/viewflow/workflow/nodes/start.py
+index b808015..d1836ab 100644
+--- a/viewflow/workflow/nodes/start.py
++++ b/viewflow/workflow/nodes/start.py
+@@ -16,7 +16,7 @@ class StartActivation(mixins.NextNodeActivationMixin, Activation):
+     def create(cls, flow_task, prev_activation, token, data=None, seed=None):
+         flow_class = flow_task.flow_class
+ 
+-        process = flow_class.process_class(flow_class=flow_class)
++        process = flow_class.process_class(flow_class=flow_class, version=getattr(flow_class, 'version', 1))
+         task = flow_class.task_class(
+             flow_task=flow_task,
+             process=process,

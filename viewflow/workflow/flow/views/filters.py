@@ -96,7 +96,8 @@ class DashboardTaskListViewFilter(FilterSet):
 class DashboardProcessListViewFilter(FilterSet):
     created = DateRangeFilter()
     finished = NullDateRangeFilter()
+    version = ChoiceFilter()
 
     class Meta:
         model = Process
-        fields = ["status", "created", "finished"]
+        fields = ["status", "version", "created", "finished"]
