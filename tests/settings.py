@@ -31,7 +31,7 @@ ALLOWED_HOSTS = [env.str('DOMAIN_NAME')]
 
 INSTALLED_APPS = [
     'tests.apps.TestsConfig',
-    'viewflow',
+    'leave.apps.LeaveConfig',
     'viewflow.workflow',
 
     'django.contrib.admin',
@@ -55,8 +55,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = None
-
+ROOT_URLCONF = 'leave.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -98,11 +97,11 @@ MIGRATION_MODULES = {
     'messages': None,
     'staticfiles': None,
     'tests': None,
+    'leave': None,
     'guardian': None,
     'helloworld': None,
     'bloodtest': None,
 }
-
 # Internationalization
 # https://docs.djangoproject.com/en/dev/topics/i18n/
 

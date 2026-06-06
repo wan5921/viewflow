@@ -1,0 +1,31 @@
+{% extends "viewflow/workflow/task_detail.html" %}
+{% load i18n %}
+
+{% block task_content %}
+  <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
+    <div class="mdc-card vf-card">
+      <section class="vf-card__header">
+        <h2 class="vf-card__title">{% trans "Leave request snapshot" %}</h2>
+      </section>
+      <section class="vf-card__body">
+        <table class="vf-list__table">
+          <tbody>
+            <tr>
+              <th class="vf-list__table-header vf-list__table-header-text">{% trans "Applicant" %}</th>
+              <td>{{ process.applicant }}</td>
+            </tr>
+            <tr>
+              <th class="vf-list__table-header vf-list__table-header-text">{% trans "Days" %}</th>
+              <td>{{ process.days }}</td>
+            </tr>
+            <tr>
+              <th class="vf-list__table-header vf-list__table-header-text">{% trans "Reason" %}</th>
+              <td>{{ process.reason|linebreaksbr }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </div>
+  {{ block.super }}
+{% endblock %}

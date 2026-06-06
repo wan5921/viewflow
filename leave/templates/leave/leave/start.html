@@ -1,0 +1,22 @@
+{% extends "viewflow/workflow/start.html" %}
+{% load i18n %}
+
+{% block form-header-title %}
+  <h1 class="vf-card__title">{% trans "Submit leave request" %}</h1>
+{% endblock %}
+
+{% block form-header-subtitle %}
+  <h2 class="vf-card__breadcrumbs">
+    <a href="{% reverse viewset 'index' %}">{{ request.activation.flow_class.process_title }}</a>
+    <a>{% trans "Start" %}</a>
+  </h2>
+{% endblock %}
+
+{% block form %}
+  <section class="vf-card__body">
+    <p class="mdc-typography mdc-typography--body2">
+      {% trans "Fill in the applicant, leave days and reason to start the approval flow." %}
+    </p>
+  </section>
+  {{ block.super }}
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "viewflow/workflow/task.html" %}
+{% load i18n %}
+
+{% block form-header-title %}
+  <h1 class="vf-card__title">{{ request.activation.flow_task.task_title }}</h1>
+{% endblock %}
+
+{% block form %}
+  <section class="vf-card__body">
+    <p class="mdc-typography mdc-typography--body2">
+      {% trans "Review the leave request details below and complete the current approval step." %}
+    </p>
+    <table class="vf-list__table">
+      <tbody>
+        <tr>
+          <th class="vf-list__table-header vf-list__table-header-text">{% trans "Applicant" %}</th>
+          <td>{{ request.activation.process.applicant }}</td>
+        </tr>
+        <tr>
+          <th class="vf-list__table-header vf-list__table-header-text">{% trans "Days" %}</th>
+          <td>{{ request.activation.process.days }}</td>
+        </tr>
+        <tr>
+          <th class="vf-list__table-header vf-list__table-header-text">{% trans "Reason" %}</th>
+          <td>{{ request.activation.process.reason|linebreaksbr }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+  {{ block.super }}
+{% endblock %}

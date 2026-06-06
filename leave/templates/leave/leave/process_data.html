@@ -1,0 +1,28 @@
+{% load i18n %}
+<div class="mdc-card vf-card">
+  <section class="vf-card__header">
+    <h1 class="vf-card__title">{% trans "Leave request" %}</h1>
+  </section>
+  <section class="vf-card__body">
+    <table class="vf-list__table">
+      <tbody>
+        <tr>
+          <th class="vf-list__table-header vf-list__table-header-text">{% trans "Applicant" %}</th>
+          <td>{{ process.applicant }}</td>
+        </tr>
+        <tr>
+          <th class="vf-list__table-header vf-list__table-header-text">{% trans "Days" %}</th>
+          <td>{{ process.days }}</td>
+        </tr>
+        <tr>
+          <th class="vf-list__table-header vf-list__table-header-text">{% trans "Reason" %}</th>
+          <td>{{ process.reason|linebreaksbr }}</td>
+        </tr>
+        <tr>
+          <th class="vf-list__table-header vf-list__table-header-text">{% trans "Status" %}</th>
+          <td>{{ process.get_status_display }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</div>
