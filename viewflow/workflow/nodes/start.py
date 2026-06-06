@@ -16,10 +16,7 @@ class StartActivation(mixins.NextNodeActivationMixin, Activation):
     def create(cls, flow_task, prev_activation, token, data=None, seed=None):
         flow_class = flow_task.flow_class
 
-        process = flow_class.process_class(
-            flow_class=flow_class,
-            version=flow_class.instance.version,
-        )
+        process = flow_class.process_class(flow_class=flow_class)
         task = flow_class.task_class(
             flow_task=flow_task,
             process=process,

@@ -17,7 +17,7 @@ class Test(TestCase):  # noqa: D101
 
         self.assertEqual(
             str(queryset.query).strip(),
-            'SELECT "viewflow_process"."id", "viewflow_process"."flow_class", "viewflow_process"."version", "viewflow_process"."status",'
+            'SELECT "viewflow_process"."id", "viewflow_process"."flow_class", "viewflow_process"."status",'
             ' "viewflow_process"."created", "viewflow_process"."finished", "viewflow_process"."data",'
             ' "viewflow_process"."parent_task_id", "viewflow_process"."seed_content_type_id",'
             ' "viewflow_process"."seed_object_id", "viewflow_process"."artifact_content_type_id",'

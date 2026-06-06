@@ -20,7 +20,6 @@ class AbstractProcess(models.Model):
     """Base class for Process data object."""
 
     flow_class = FlowReferenceField(_("Flow"))
-    version = models.PositiveIntegerField(default=1, db_index=True)
     status = models.CharField(
         _("Status"),
         choices=status.PROCESS.choices,
