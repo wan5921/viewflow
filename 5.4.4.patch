@@ -1,0 +1,25 @@
+diff --git a/viewflow/workflow/activation.py b/viewflow/workflow/activation.py
+index 7f493e7..28d5634 100644
+--- a/viewflow/workflow/activation.py
++++ b/viewflow/workflow/activation.py
+@@ -7,6 +7,7 @@ from django.db import connection, transaction
+ from django.utils.timezone import now
+ 
+ from viewflow import fsm
++from viewflow.authorization import AuthorizationMixin
+ from .context import context
+ from .signals import task_finished, task_failed
+ from .status import STATUS, PROCESS
+@@ -73,10 +74,10 @@ def has_manage_permission(activation: "Activation", user: Any) -> bool:
+     Returns:
+         bool: True if the user has manage permission, False otherwise.
+     """
+-    return activation.flow_class.instance.has_manage_permission(user)
++    return activation.has_manage_permission(user)
+ 
+ 
+-class Activation:
++class Activation(AuthorizationMixin):
+     """
+     Base class for flow task activations.
+ 
