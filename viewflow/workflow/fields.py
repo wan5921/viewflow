@@ -29,7 +29,7 @@ def import_flow_by_ref(flow_strref):
 
 @lru_cache(maxsize=None)
 def get_flow_ref(flow_class):
-    """Convert flow class to string reference suitable to store in the db."""
+    """Convert flow class to string reference."""
     module = "{}.{}".format(flow_class.__module__, flow_class.__name__)
     app_label, app_package = get_containing_app_data(module)
     if app_label is None:

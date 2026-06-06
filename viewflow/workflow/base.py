@@ -255,7 +255,6 @@ class Flow(Viewset, metaclass=FlowMetaClass):
     """
 
     instance: Optional["Flow"] = None
-    version: int = 1
 
     process_class: Optional[type] = None
     task_class: Optional[type] = None
@@ -266,19 +265,16 @@ class Flow(Viewset, metaclass=FlowMetaClass):
     process_summary_template: str = ""
     process_result_template: str = ""
 
-    def __init_subclass__(cls, version: int = 1, **kwargs: Any) -> None:
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         """
         Create a new node instance.
 
         :param activation_class: The activation class to use for this node.
         :type activation_class: class
-        :param version: The version number for this flow.
-        :type version: int
         :param kwargs: Additional keyword arguments to pass to the superclass.
         """
         super().__init_subclass__(**kwargs)
         cls.instance = LazySingletonDescriptor()
-        cls.version = version
 
         # process and task default values
         from .models import Process, Task  # avoid app not loaded error
@@ -341,29 +337,6 @@ class Flow(Viewset, metaclass=FlowMetaClass):
         # complete node setup
         for _, node in cls._nodes_by_name.items():
             node._ready()
-
-    @classmethod
-    def upgrade_version(cls, new_version: int = None) -> type:
-        """
-        Create a new version of this flow class.
-
-        :param new_version: The version number for the new flow. If None, auto-increment.
-        :type new_version: int
-        :returns: A new flow class with the specified version.
-        :rtype: type
-        """
-        if new_version is None:
-            new_version = cls.version + 1
-
-        class_name = f"{cls.__name__}V{new_version}"
-
-        versioned_cls = type(
-            class_name,
-            (cls,),
-            {"version": new_version},
-        )
-
-        return versioned_cls
 
     def __str__(self) -> str:
         return str(self.process_title)

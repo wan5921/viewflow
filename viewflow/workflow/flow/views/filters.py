@@ -45,10 +45,6 @@ class FlowUserTaskListFilter(FilterSet):
     process = ModelChoiceFilter(queryset=this.queue_processes_query)
     flow_task = ChoiceFilter()
     created = DateRangeFilter()
-    version = ChoiceFilter(
-        method="filter_version",
-        label="Process Version",
-    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -59,22 +55,15 @@ class FlowUserTaskListFilter(FilterSet):
     def queue_processes_query(self, request):
         return Process.objects.filter(pk__in=self.queryset.values("process"))
 
-    def filter_version(self, queryset, name, value):
-        return queryset.filter(process__version=value)
-
     class Meta:
         model = Task
-        fields = ("process", "flow_task", "created", "version")
+        fields = ("process", "flow_task", "created")
 
 
 class FlowArchiveListFilter(FilterSet):
     flow_task = ChoiceFilter()
     created = DateRangeFilter()
     finished = DateRangeFilter()
-    version = ChoiceFilter(
-        method="filter_version",
-        label="Process Version",
-    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -82,12 +71,9 @@ class FlowArchiveListFilter(FilterSet):
             self.queryset
         )
 
-    def filter_version(self, queryset, name, value):
-        return queryset.filter(process__version=value)
-
     class Meta:
         model = Task
-        fields = ("flow_task", "created", "finished", "version")
+        fields = ("flow_task", "created", "finished")
 
 
 class DashboardTaskListViewFilter(FilterSet):
@@ -95,10 +81,6 @@ class DashboardTaskListViewFilter(FilterSet):
     status = MultipleChoiceFilter(choices=STATUS.choices)
     created = DateRangeFilter()
     finished = NullDateRangeFilter()
-    version = ChoiceFilter(
-        method="filter_version",
-        label="Process Version",
-    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -106,19 +88,15 @@ class DashboardTaskListViewFilter(FilterSet):
             self.queryset
         )
 
-    def filter_version(self, queryset, name, value):
-        return queryset.filter(process__version=value)
-
     class Meta:
         model = Task
-        fields = ["flow_task", "status", "created", "finished", "version"]
+        fields = ["flow_task", "status", "created", "finished"]
 
 
 class DashboardProcessListViewFilter(FilterSet):
     created = DateRangeFilter()
     finished = NullDateRangeFilter()
-    version = ChoiceFilter(label="Process Version")
 
     class Meta:
         model = Process
-        fields = ["status", "created", "finished", "version"]
+        fields = ["status", "created", "finished"]

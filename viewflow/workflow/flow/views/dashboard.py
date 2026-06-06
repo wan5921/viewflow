@@ -121,13 +121,7 @@ class DashboardTaskListView(
     @viewprop
     def queryset(self):
         queryset = self.model._default_manager.all()
-        qs = queryset.filter(process__flow_class=self.flow_class)
-
-        version = self.request.GET.get("version")
-        if version is not None:
-            qs = qs.filter(process__version=int(version))
-
-        return qs
+        return queryset.filter(process__flow_class=self.flow_class)
 
 
 class DashboardProcessListView(
@@ -161,10 +155,4 @@ class DashboardProcessListView(
     def get_queryset(self):
         """Filtered process list."""
         queryset = super().get_queryset()
-        qs = queryset.filter(flow_class=self.flow_class)
-
-        version = self.request.GET.get("version")
-        if version is not None:
-            qs = qs.filter(version=int(version))
-
-        return qs
+        return queryset.filter(flow_class=self.flow_class)
