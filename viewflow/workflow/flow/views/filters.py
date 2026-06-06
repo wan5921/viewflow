@@ -4,6 +4,7 @@ from django_filters import (
     FilterSet,
     ModelChoiceFilter as BaseModelChoiceFilter,
     MultipleChoiceFilter,
+    NumberFilter,
 )
 
 from viewflow.this_object import this
@@ -44,6 +45,7 @@ def get_queryset_flow_task_choices(queryset):
 class FlowUserTaskListFilter(FilterSet):
     process = ModelChoiceFilter(queryset=this.queue_processes_query)
     flow_task = ChoiceFilter()
+    version = NumberFilter(field_name="process__version")
     created = DateRangeFilter()
 
     def __init__(self, *args, **kwargs):
@@ -57,11 +59,12 @@ class FlowUserTaskListFilter(FilterSet):
 
     class Meta:
         model = Task
-        fields = ("process", "flow_task", "created")
+        fields = ("process", "flow_task", "version", "created")
 
 
 class FlowArchiveListFilter(FilterSet):
     flow_task = ChoiceFilter()
+    version = NumberFilter(field_name="process__version")
     created = DateRangeFilter()
     finished = DateRangeFilter()
 
@@ -73,11 +76,12 @@ class FlowArchiveListFilter(FilterSet):
 
     class Meta:
         model = Task
-        fields = ("flow_task", "created", "finished")
+        fields = ("flow_task", "version", "created", "finished")
 
 
 class DashboardTaskListViewFilter(FilterSet):
     flow_task = ChoiceFilter()
+    version = NumberFilter(field_name="process__version")
     status = MultipleChoiceFilter(choices=STATUS.choices)
     created = DateRangeFilter()
     finished = NullDateRangeFilter()
@@ -90,13 +94,14 @@ class DashboardTaskListViewFilter(FilterSet):
 
     class Meta:
         model = Task
-        fields = ["flow_task", "status", "created", "finished"]
+        fields = ["flow_task", "version", "status", "created", "finished"]
 
 
 class DashboardProcessListViewFilter(FilterSet):
+    version = NumberFilter()
     created = DateRangeFilter()
     finished = NullDateRangeFilter()
 
     class Meta:
         model = Process
-        fields = ["status", "created", "finished"]
+        fields = ["status", "version", "created", "finished"]

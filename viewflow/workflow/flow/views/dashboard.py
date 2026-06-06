@@ -33,6 +33,21 @@ class DashboardView(
     #        return self.viewset.get_queryset(self.request)
     #    return self.flow_class.task_class._default_manager
 
+    def get_version(self):
+        version = self.request.GET.get("version")
+        if version is None or version == "":
+            return None
+        try:
+            return int(version)
+        except (TypeError, ValueError):
+            return None
+
+    def filter_by_version(self, queryset):
+        version = self.get_version()
+        if version is not None:
+            return queryset.filter(process__version=version)
+        return queryset
+
     def get_context_data(self, **kwargs):
         sorted_nodes, _ = chart.topsort(self.flow_class)
         nodes = [
@@ -49,25 +64,27 @@ class DashboardView(
         end_nodes = [node for node in sorted_nodes if node.task_type in ["END"]]
 
         columns = []
+        available_tasks = self.filter_by_version(
+            self.flow_class.task_class._default_manager.filter_available(
+                [self.flow_class], self.request.user
+            )
+        )
         for node in nodes:
             columns.append(
                 {
                     "node": node,
                     "node_ref": get_task_ref(node),
-                    "tasks": self.flow_class.task_class._default_manager.filter_available(
-                        [self.flow_class], self.request.user
-                    ).filter(
+                    "tasks": available_tasks.filter(
                         Q(finished__isnull=True) | Q(status=STATUS.ERROR),
                         flow_task=node,
-                    )[
-                        : self.MAX_ROWS
-                    ],
+                    )[: self.MAX_ROWS],
                 }
             )
 
-        finished = self.flow_class.task_class._default_manager.filter_available(
-            [self.flow_class], self.request.user
-        ).filter(finished__isnull=False, flow_task__in=end_nodes)[: self.MAX_ROWS]
+        finished = available_tasks.filter(
+            finished__isnull=False,
+            flow_task__in=end_nodes,
+        )[: self.MAX_ROWS]
 
         return super().get_context_data(
             columns=columns,

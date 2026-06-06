@@ -1,0 +1,225 @@
+diff --git a/tests/workflow/test_managers__sql.py b/tests/workflow/test_managers__sql.py
+index 11a63c4..19ca106 100644
+--- a/tests/workflow/test_managers__sql.py
++++ b/tests/workflow/test_managers__sql.py
+@@ -17,7 +17,7 @@ class Test(TestCase):  # noqa: D101
+ 
+         self.assertEqual(
+             str(queryset.query).strip(),
+-            'SELECT "viewflow_process"."id", "viewflow_process"."flow_class", "viewflow_process"."status",'
++            'SELECT "viewflow_process"."id", "viewflow_process"."flow_class", "viewflow_process"."version", "viewflow_process"."status",'
+             ' "viewflow_process"."created", "viewflow_process"."finished", "viewflow_process"."data",'
+             ' "viewflow_process"."parent_task_id", "viewflow_process"."seed_content_type_id",'
+             ' "viewflow_process"."seed_object_id", "viewflow_process"."artifact_content_type_id",'
+diff --git a/viewflow/workflow/base.py b/viewflow/workflow/base.py
+index 5b4f453..d77155b 100644
+--- a/viewflow/workflow/base.py
++++ b/viewflow/workflow/base.py
+@@ -237,6 +237,14 @@ class Node(Viewset):
+ 
+ 
+ class FlowMetaClass(ViewsetMeta):
++    def __call__(cls, *args: Any, **kwargs: Any) -> Any:
++        if not args and set(kwargs).issubset({"version"}):
++            version = int(kwargs.get("version", cls.version))
++            if version not in cls._instance_by_version:
++                cls._instance_by_version[version] = super().__call__(version=version)
++            return cls._instance_by_version[version]
++        return super().__call__(*args, **kwargs)
++
+     def __str__(self) -> str:
+         from .fields import get_flow_ref
+ 
+@@ -255,6 +263,8 @@ class Flow(Viewset, metaclass=FlowMetaClass):
+     """
+ 
+     instance: Optional["Flow"] = None
++    version: int = 1
++    _instance_by_version: Dict[int, "Flow"] = {}
+ 
+     process_class: Optional[type] = None
+     task_class: Optional[type] = None
+@@ -275,6 +285,7 @@ class Flow(Viewset, metaclass=FlowMetaClass):
+         """
+         super().__init_subclass__(**kwargs)
+         cls.instance = LazySingletonDescriptor()
++        cls._instance_by_version = {}
+ 
+         # process and task default values
+         from .models import Process, Task  # avoid app not loaded error
+@@ -338,6 +349,19 @@ class Flow(Viewset, metaclass=FlowMetaClass):
+         for _, node in cls._nodes_by_name.items():
+             node._ready()
+ 
++    def __init__(self, **kwargs: Any) -> None:
++        super().__init__(**kwargs)
++        self.version = int(self.version)
++
++    @classmethod
++    def get_instance(cls, version: Optional[int] = None) -> "Flow":
++        return cls(version=version or cls.version)
++
++    @classmethod
++    def upgrade(cls) -> "Flow":
++        version = max(cls._instance_by_version.keys(), default=cls.version) + 1
++        return cls(version=version)
++
+     def __str__(self) -> str:
+         return str(self.process_title)
+ 
+diff --git a/viewflow/workflow/flow/views/dashboard.py b/viewflow/workflow/flow/views/dashboard.py
+index ba19611..743d93b 100644
+--- a/viewflow/workflow/flow/views/dashboard.py
++++ b/viewflow/workflow/flow/views/dashboard.py
+@@ -33,6 +33,21 @@ class DashboardView(
+     #        return self.viewset.get_queryset(self.request)
+     #    return self.flow_class.task_class._default_manager
+ 
++    def get_version(self):
++        version = self.request.GET.get("version")
++        if version is None or version == "":
++            return None
++        try:
++            return int(version)
++        except (TypeError, ValueError):
++            return None
++
++    def filter_by_version(self, queryset):
++        version = self.get_version()
++        if version is not None:
++            return queryset.filter(process__version=version)
++        return queryset
++
+     def get_context_data(self, **kwargs):
+         sorted_nodes, _ = chart.topsort(self.flow_class)
+         nodes = [
+@@ -49,25 +64,27 @@ class DashboardView(
+         end_nodes = [node for node in sorted_nodes if node.task_type in ["END"]]
+ 
+         columns = []
++        available_tasks = self.filter_by_version(
++            self.flow_class.task_class._default_manager.filter_available(
++                [self.flow_class], self.request.user
++            )
++        )
+         for node in nodes:
+             columns.append(
+                 {
+                     "node": node,
+                     "node_ref": get_task_ref(node),
+-                    "tasks": self.flow_class.task_class._default_manager.filter_available(
+-                        [self.flow_class], self.request.user
+-                    ).filter(
++                    "tasks": available_tasks.filter(
+                         Q(finished__isnull=True) | Q(status=STATUS.ERROR),
+                         flow_task=node,
+-                    )[
+-                        : self.MAX_ROWS
+-                    ],
++                    )[: self.MAX_ROWS],
+                 }
+             )
+ 
+-        finished = self.flow_class.task_class._default_manager.filter_available(
+-            [self.flow_class], self.request.user
+-        ).filter(finished__isnull=False, flow_task__in=end_nodes)[: self.MAX_ROWS]
++        finished = available_tasks.filter(
++            finished__isnull=False,
++            flow_task__in=end_nodes,
++        )[: self.MAX_ROWS]
+ 
+         return super().get_context_data(
+             columns=columns,
+diff --git a/viewflow/workflow/flow/views/filters.py b/viewflow/workflow/flow/views/filters.py
+index 7bbffff..3bc5874 100644
+--- a/viewflow/workflow/flow/views/filters.py
++++ b/viewflow/workflow/flow/views/filters.py
+@@ -4,6 +4,7 @@ from django_filters import (
+     FilterSet,
+     ModelChoiceFilter as BaseModelChoiceFilter,
+     MultipleChoiceFilter,
++    NumberFilter,
+ )
+ 
+ from viewflow.this_object import this
+@@ -44,6 +45,7 @@ def get_queryset_flow_task_choices(queryset):
+ class FlowUserTaskListFilter(FilterSet):
+     process = ModelChoiceFilter(queryset=this.queue_processes_query)
+     flow_task = ChoiceFilter()
++    version = NumberFilter(field_name="process__version")
+     created = DateRangeFilter()
+ 
+     def __init__(self, *args, **kwargs):
+@@ -57,11 +59,12 @@ class FlowUserTaskListFilter(FilterSet):
+ 
+     class Meta:
+         model = Task
+-        fields = ("process", "flow_task", "created")
++        fields = ("process", "flow_task", "version", "created")
+ 
+ 
+ class FlowArchiveListFilter(FilterSet):
+     flow_task = ChoiceFilter()
++    version = NumberFilter(field_name="process__version")
+     created = DateRangeFilter()
+     finished = DateRangeFilter()
+ 
+@@ -73,11 +76,12 @@ class FlowArchiveListFilter(FilterSet):
+ 
+     class Meta:
+         model = Task
+-        fields = ("flow_task", "created", "finished")
++        fields = ("flow_task", "version", "created", "finished")
+ 
+ 
+ class DashboardTaskListViewFilter(FilterSet):
+     flow_task = ChoiceFilter()
++    version = NumberFilter(field_name="process__version")
+     status = MultipleChoiceFilter(choices=STATUS.choices)
+     created = DateRangeFilter()
+     finished = NullDateRangeFilter()
+@@ -90,13 +94,14 @@ class DashboardTaskListViewFilter(FilterSet):
+ 
+     class Meta:
+         model = Task
+-        fields = ["flow_task", "status", "created", "finished"]
++        fields = ["flow_task", "version", "status", "created", "finished"]
+ 
+ 
+ class DashboardProcessListViewFilter(FilterSet):
++    version = NumberFilter()
+     created = DateRangeFilter()
+     finished = NullDateRangeFilter()
+ 
+     class Meta:
+         model = Process
+-        fields = ["status", "created", "finished"]
++        fields = ["status", "version", "created", "finished"]
+diff --git a/viewflow/workflow/models.py b/viewflow/workflow/models.py
+index 591390a..08cf782 100644
+--- a/viewflow/workflow/models.py
++++ b/viewflow/workflow/models.py
+@@ -20,6 +20,7 @@ class AbstractProcess(models.Model):
+     """Base class for Process data object."""
+ 
+     flow_class = FlowReferenceField(_("Flow"))
++    version = models.PositiveIntegerField(default=1, db_index=True)
+     status = models.CharField(
+         _("Status"),
+         choices=status.PROCESS.choices,
+diff --git a/viewflow/workflow/nodes/start.py b/viewflow/workflow/nodes/start.py
+index b808015..68e8ed3 100644
+--- a/viewflow/workflow/nodes/start.py
++++ b/viewflow/workflow/nodes/start.py
+@@ -16,7 +16,10 @@ class StartActivation(mixins.NextNodeActivationMixin, Activation):
+     def create(cls, flow_task, prev_activation, token, data=None, seed=None):
+         flow_class = flow_task.flow_class
+ 
+-        process = flow_class.process_class(flow_class=flow_class)
++        process = flow_class.process_class(
++            flow_class=flow_class,
++            version=flow_class.instance.version,
++        )
+         task = flow_class.task_class(
+             flow_task=flow_task,
+             process=process,

@@ -237,6 +237,14 @@ class Node(Viewset):
 
 
 class FlowMetaClass(ViewsetMeta):
+    def __call__(cls, *args: Any, **kwargs: Any) -> Any:
+        if not args and set(kwargs).issubset({"version"}):
+            version = int(kwargs.get("version", cls.version))
+            if version not in cls._instance_by_version:
+                cls._instance_by_version[version] = super().__call__(version=version)
+            return cls._instance_by_version[version]
+        return super().__call__(*args, **kwargs)
+
     def __str__(self) -> str:
         from .fields import get_flow_ref
 
@@ -255,6 +263,8 @@ class Flow(Viewset, metaclass=FlowMetaClass):
     """
 
     instance: Optional["Flow"] = None
+    version: int = 1
+    _instance_by_version: Dict[int, "Flow"] = {}
 
     process_class: Optional[type] = None
     task_class: Optional[type] = None
@@ -275,6 +285,7 @@ class Flow(Viewset, metaclass=FlowMetaClass):
         """
         super().__init_subclass__(**kwargs)
         cls.instance = LazySingletonDescriptor()
+        cls._instance_by_version = {}
 
         # process and task default values
         from .models import Process, Task  # avoid app not loaded error
@@ -337,6 +348,19 @@ class Flow(Viewset, metaclass=FlowMetaClass):
         # complete node setup
         for _, node in cls._nodes_by_name.items():
             node._ready()
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.version = int(self.version)
+
+    @classmethod
+    def get_instance(cls, version: Optional[int] = None) -> "Flow":
+        return cls(version=version or cls.version)
+
+    @classmethod
+    def upgrade(cls) -> "Flow":
+        version = max(cls._instance_by_version.keys(), default=cls.version) + 1
+        return cls(version=version)
 
     def __str__(self) -> str:
         return str(self.process_title)
