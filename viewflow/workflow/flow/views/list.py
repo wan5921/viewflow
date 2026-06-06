@@ -43,11 +43,17 @@ class FlowInboxListView(
         """List of tasks assigned to the current user."""
         queryset = self.model._default_manager.all()
 
-        return queryset.filter(
+        qs = queryset.filter(
             process__flow_class=self.flow_class,
             owner=self.request.user,
             status=STATUS.ASSIGNED,
-        ).order_by("-created")
+        )
+
+        version = self.request.GET.get("version")
+        if version is not None:
+            qs = qs.filter(process__version=int(version))
+
+        return qs.order_by("-created")
 
 
 class FlowQueueListView(
@@ -83,11 +89,15 @@ class FlowQueueListView(
         """List of tasks available to the current user."""
         queryset = self.model._default_manager.all()
 
-        return (
-            queryset.user_queue(self.request.user, flow_class=self.flow_class)
-            .filter(status=STATUS.NEW)
-            .order_by("-created")
+        qs = queryset.user_queue(self.request.user, flow_class=self.flow_class).filter(
+            status=STATUS.NEW
         )
+
+        version = self.request.GET.get("version")
+        if version is not None:
+            qs = qs.filter(process__version=int(version))
+
+        return qs.order_by("-created")
 
 
 class FlowArchiveListView(
@@ -124,9 +134,15 @@ class FlowArchiveListView(
         """List of task completed by the current user."""
         queryset = self.model._default_manager.all().select_related("process")
 
-        return queryset.user_archive(
+        qs = queryset.user_archive(
             self.request.user, flow_class=self.flow_class
-        ).order_by("-created")
+        )
+
+        version = self.request.GET.get("version")
+        if version is not None:
+            qs = qs.filter(process__version=int(version))
+
+        return qs.order_by("-created")
 
 
 class WorkflowTaskListView(mixins.StoreRequestPathMixin, ListModelView):

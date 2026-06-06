@@ -1,0 +1,284 @@
+diff --git a/viewflow/workflow/base.py b/viewflow/workflow/base.py
+index 5b4f453..33a6970 100644
+--- a/viewflow/workflow/base.py
++++ b/viewflow/workflow/base.py
+@@ -255,6 +255,7 @@ class Flow(Viewset, metaclass=FlowMetaClass):
+     """
+ 
+     instance: Optional["Flow"] = None
++    version: int = 1
+ 
+     process_class: Optional[type] = None
+     task_class: Optional[type] = None
+@@ -265,16 +266,19 @@ class Flow(Viewset, metaclass=FlowMetaClass):
+     process_summary_template: str = ""
+     process_result_template: str = ""
+ 
+-    def __init_subclass__(cls, **kwargs: Any) -> None:
++    def __init_subclass__(cls, version: int = 1, **kwargs: Any) -> None:
+         """
+         Create a new node instance.
+ 
+         :param activation_class: The activation class to use for this node.
+         :type activation_class: class
++        :param version: The version number for this flow.
++        :type version: int
+         :param kwargs: Additional keyword arguments to pass to the superclass.
+         """
+         super().__init_subclass__(**kwargs)
+         cls.instance = LazySingletonDescriptor()
++        cls.version = version
+ 
+         # process and task default values
+         from .models import Process, Task  # avoid app not loaded error
+@@ -338,6 +342,29 @@ class Flow(Viewset, metaclass=FlowMetaClass):
+         for _, node in cls._nodes_by_name.items():
+             node._ready()
+ 
++    @classmethod
++    def upgrade_version(cls, new_version: int = None) -> type:
++        """
++        Create a new version of this flow class.
++
++        :param new_version: The version number for the new flow. If None, auto-increment.
++        :type new_version: int
++        :returns: A new flow class with the specified version.
++        :rtype: type
++        """
++        if new_version is None:
++            new_version = cls.version + 1
++
++        class_name = f"{cls.__name__}V{new_version}"
++
++        versioned_cls = type(
++            class_name,
++            (cls,),
++            {"version": new_version},
++        )
++
++        return versioned_cls
++
+     def __str__(self) -> str:
+         return str(self.process_title)
+ 
+diff --git a/viewflow/workflow/fields.py b/viewflow/workflow/fields.py
+index d0ed45d..d29ca1a 100644
+--- a/viewflow/workflow/fields.py
++++ b/viewflow/workflow/fields.py
+@@ -29,7 +29,7 @@ def import_flow_by_ref(flow_strref):
+ 
+ @lru_cache(maxsize=None)
+ def get_flow_ref(flow_class):
+-    """Convert flow class to string reference."""
++    """Convert flow class to string reference suitable to store in the db."""
+     module = "{}.{}".format(flow_class.__module__, flow_class.__name__)
+     app_label, app_package = get_containing_app_data(module)
+     if app_label is None:
+diff --git a/viewflow/workflow/flow/views/dashboard.py b/viewflow/workflow/flow/views/dashboard.py
+index ba19611..f248ad8 100644
+--- a/viewflow/workflow/flow/views/dashboard.py
++++ b/viewflow/workflow/flow/views/dashboard.py
+@@ -121,7 +121,13 @@ class DashboardTaskListView(
+     @viewprop
+     def queryset(self):
+         queryset = self.model._default_manager.all()
+-        return queryset.filter(process__flow_class=self.flow_class)
++        qs = queryset.filter(process__flow_class=self.flow_class)
++
++        version = self.request.GET.get("version")
++        if version is not None:
++            qs = qs.filter(process__version=int(version))
++
++        return qs
+ 
+ 
+ class DashboardProcessListView(
+@@ -155,4 +161,10 @@ class DashboardProcessListView(
+     def get_queryset(self):
+         """Filtered process list."""
+         queryset = super().get_queryset()
+-        return queryset.filter(flow_class=self.flow_class)
++        qs = queryset.filter(flow_class=self.flow_class)
++
++        version = self.request.GET.get("version")
++        if version is not None:
++            qs = qs.filter(version=int(version))
++
++        return qs
+diff --git a/viewflow/workflow/flow/views/filters.py b/viewflow/workflow/flow/views/filters.py
+index 7bbffff..28f8d1e 100644
+--- a/viewflow/workflow/flow/views/filters.py
++++ b/viewflow/workflow/flow/views/filters.py
+@@ -45,6 +45,10 @@ class FlowUserTaskListFilter(FilterSet):
+     process = ModelChoiceFilter(queryset=this.queue_processes_query)
+     flow_task = ChoiceFilter()
+     created = DateRangeFilter()
++    version = ChoiceFilter(
++        method="filter_version",
++        label="Process Version",
++    )
+ 
+     def __init__(self, *args, **kwargs):
+         super().__init__(*args, **kwargs)
+@@ -55,15 +59,22 @@ class FlowUserTaskListFilter(FilterSet):
+     def queue_processes_query(self, request):
+         return Process.objects.filter(pk__in=self.queryset.values("process"))
+ 
++    def filter_version(self, queryset, name, value):
++        return queryset.filter(process__version=value)
++
+     class Meta:
+         model = Task
+-        fields = ("process", "flow_task", "created")
++        fields = ("process", "flow_task", "created", "version")
+ 
+ 
+ class FlowArchiveListFilter(FilterSet):
+     flow_task = ChoiceFilter()
+     created = DateRangeFilter()
+     finished = DateRangeFilter()
++    version = ChoiceFilter(
++        method="filter_version",
++        label="Process Version",
++    )
+ 
+     def __init__(self, *args, **kwargs):
+         super().__init__(*args, **kwargs)
+@@ -71,9 +82,12 @@ class FlowArchiveListFilter(FilterSet):
+             self.queryset
+         )
+ 
++    def filter_version(self, queryset, name, value):
++        return queryset.filter(process__version=value)
++
+     class Meta:
+         model = Task
+-        fields = ("flow_task", "created", "finished")
++        fields = ("flow_task", "created", "finished", "version")
+ 
+ 
+ class DashboardTaskListViewFilter(FilterSet):
+@@ -81,6 +95,10 @@ class DashboardTaskListViewFilter(FilterSet):
+     status = MultipleChoiceFilter(choices=STATUS.choices)
+     created = DateRangeFilter()
+     finished = NullDateRangeFilter()
++    version = ChoiceFilter(
++        method="filter_version",
++        label="Process Version",
++    )
+ 
+     def __init__(self, *args, **kwargs):
+         super().__init__(*args, **kwargs)
+@@ -88,15 +106,19 @@ class DashboardTaskListViewFilter(FilterSet):
+             self.queryset
+         )
+ 
++    def filter_version(self, queryset, name, value):
++        return queryset.filter(process__version=value)
++
+     class Meta:
+         model = Task
+-        fields = ["flow_task", "status", "created", "finished"]
++        fields = ["flow_task", "status", "created", "finished", "version"]
+ 
+ 
+ class DashboardProcessListViewFilter(FilterSet):
+     created = DateRangeFilter()
+     finished = NullDateRangeFilter()
++    version = ChoiceFilter(label="Process Version")
+ 
+     class Meta:
+         model = Process
+-        fields = ["status", "created", "finished"]
++        fields = ["status", "created", "finished", "version"]
+diff --git a/viewflow/workflow/flow/views/list.py b/viewflow/workflow/flow/views/list.py
+index 64417d1..9623ae2 100644
+--- a/viewflow/workflow/flow/views/list.py
++++ b/viewflow/workflow/flow/views/list.py
+@@ -43,11 +43,17 @@ class FlowInboxListView(
+         """List of tasks assigned to the current user."""
+         queryset = self.model._default_manager.all()
+ 
+-        return queryset.filter(
++        qs = queryset.filter(
+             process__flow_class=self.flow_class,
+             owner=self.request.user,
+             status=STATUS.ASSIGNED,
+-        ).order_by("-created")
++        )
++
++        version = self.request.GET.get("version")
++        if version is not None:
++            qs = qs.filter(process__version=int(version))
++
++        return qs.order_by("-created")
+ 
+ 
+ class FlowQueueListView(
+@@ -83,12 +89,16 @@ class FlowQueueListView(
+         """List of tasks available to the current user."""
+         queryset = self.model._default_manager.all()
+ 
+-        return (
+-            queryset.user_queue(self.request.user, flow_class=self.flow_class)
+-            .filter(status=STATUS.NEW)
+-            .order_by("-created")
++        qs = queryset.user_queue(self.request.user, flow_class=self.flow_class).filter(
++            status=STATUS.NEW
+         )
+ 
++        version = self.request.GET.get("version")
++        if version is not None:
++            qs = qs.filter(process__version=int(version))
++
++        return qs.order_by("-created")
++
+ 
+ class FlowArchiveListView(
+     mixins.StoreRequestPathMixin,
+@@ -124,9 +134,15 @@ class FlowArchiveListView(
+         """List of task completed by the current user."""
+         queryset = self.model._default_manager.all().select_related("process")
+ 
+-        return queryset.user_archive(
++        qs = queryset.user_archive(
+             self.request.user, flow_class=self.flow_class
+-        ).order_by("-created")
++        )
++
++        version = self.request.GET.get("version")
++        if version is not None:
++            qs = qs.filter(process__version=int(version))
++
++        return qs.order_by("-created")
+ 
+ 
+ class WorkflowTaskListView(mixins.StoreRequestPathMixin, ListModelView):
+diff --git a/viewflow/workflow/models.py b/viewflow/workflow/models.py
+index 591390a..499442d 100644
+--- a/viewflow/workflow/models.py
++++ b/viewflow/workflow/models.py
+@@ -20,6 +20,7 @@ class AbstractProcess(models.Model):
+     """Base class for Process data object."""
+ 
+     flow_class = FlowReferenceField(_("Flow"))
++    version = models.PositiveIntegerField(_("Version"), default=1)
+     status = models.CharField(
+         _("Status"),
+         choices=status.PROCESS.choices,
+diff --git a/viewflow/workflow/nodes/start.py b/viewflow/workflow/nodes/start.py
+index b808015..00acf7f 100644
+--- a/viewflow/workflow/nodes/start.py
++++ b/viewflow/workflow/nodes/start.py
+@@ -16,7 +16,10 @@ class StartActivation(mixins.NextNodeActivationMixin, Activation):
+     def create(cls, flow_task, prev_activation, token, data=None, seed=None):
+         flow_class = flow_task.flow_class
+ 
+-        process = flow_class.process_class(flow_class=flow_class)
++        process = flow_class.process_class(
++            flow_class=flow_class,
++            version=flow_class.version,
++        )
+         task = flow_class.task_class(
+             flow_task=flow_task,
+             process=process,
