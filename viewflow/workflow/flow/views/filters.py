@@ -96,20 +96,7 @@ class DashboardTaskListViewFilter(FilterSet):
 class DashboardProcessListViewFilter(FilterSet):
     created = DateRangeFilter()
     finished = NullDateRangeFilter()
-    version = ChoiceFilter()
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.filters["version"].field.choices = self._get_version_choices()
-
-    def _get_version_choices(self):
-        versions = (
-            self.queryset.order_by("version")
-            .values_list("version", flat=True)
-            .distinct()
-        )
-        return [(v, str(v)) for v in versions]
 
     class Meta:
         model = Process
-        fields = ["status", "created", "finished", "version"]
+        fields = ["status", "created", "finished"]
