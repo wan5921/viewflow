@@ -195,12 +195,12 @@ class Activation:
         Returns:
             Activation: The newly created activation instance.
         """
-        flow_class = flow_task.flow_class
         task = flow_class.task_class(
             process=prev_activation.process,
             flow_task=flow_task,
             token=token,
         )
+        print(f"[create_task] token={token}, owner_process_id={task.process_id}")
         task.data = data if data is not None else {}
         task.seed = seed
         task.save()

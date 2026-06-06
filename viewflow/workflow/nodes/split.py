@@ -21,12 +21,10 @@ class SplitActivation(Activation):
 
     @Activation.status.super()
     def activate(self):
-        """Calculate nodes list to activate."""
         for node, cond, data_source in self.flow_task._branches:
             if cond and not cond(self):
                 continue
-            else:
-                self.next_tasks.append((node, None))
+            self.next_tasks.append((node, data_source))
 
         if not self.next_tasks:
             raise FlowRuntimeError(
@@ -126,16 +124,11 @@ class Split(
         return self._activate_next
 
     def Next(self, node, case=None):
-        """Node to activate if condition is true.
-
-        :param cond: Callable[activation] -> bool
-
-        """
         self._activate_next.append((node, case, None))
         return self
 
     def Always(self, node):
-        return self.Next(node)
+        self._activate_next.append((node, None, None))
 
 
 class SplitFirstActivation(SplitActivation):
