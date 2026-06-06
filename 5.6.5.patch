@@ -1,0 +1,89 @@
+diff --git a/tests/workflow/test_activation.py b/tests/workflow/test_activation.py
+index 20f5a73..75515d1 100644
+--- a/tests/workflow/test_activation.py
++++ b/tests/workflow/test_activation.py
+@@ -1,7 +1,10 @@
++from unittest import mock
++
+ from django.test import TestCase
+ from viewflow.workflow import STATUS
+ from viewflow.workflow.models import Process, Task
+ from viewflow.workflow.activation import Activation
++from viewflow.workflow.nodes.if_gate import IfActivation, If
+ 
+ 
+ class Test(TestCase):  # noqa: D101
+@@ -11,3 +14,73 @@ class Test(TestCase):  # noqa: D101
+         activation = Activation(task)
+         transitions = activation.get_outgoing_transitions()
+         self.assertEqual(2, len(transitions))
++
++    @mock.patch.object(Activation, "create")
++    def test_if_cond_true_branch(self, mock_create):
++        mock_true_node = mock.MagicMock()
++        mock_false_node = mock.MagicMock()
++        mock_create.return_value = mock.MagicMock()
++
++        mock_flow_task = mock.MagicMock()
++        mock_flow_task._condition = mock.MagicMock(return_value=True)
++        mock_flow_task._on_true = mock_true_node
++        mock_flow_task._on_true_data = None
++        mock_flow_task._on_true_seed = None
++        mock_flow_task._on_false = mock_false_node
++        mock_flow_task._on_false_data = None
++        mock_flow_task._on_false_seed = None
++
++        mock_process = mock.MagicMock()
++
++        task = mock.MagicMock()
++        task.status = STATUS.NEW
++        task.process = mock.MagicMock()
++        task.process.coerced = mock_process
++        task.flow_task = mock_flow_task
++        task.data = {}
++
++        activation = IfActivation(task)
++
++        activation.activate()
++        self.assertTrue(activation._condition_result)
++
++        task.status = STATUS.DONE
++        list(activation.create_next())
++
++        mock_true_node._create.assert_called_once()
++        mock_false_node._create.assert_not_called()
++
++    @mock.patch.object(Activation, "create")
++    def test_if_cond_false_branch(self, mock_create):
++        mock_true_node = mock.MagicMock()
++        mock_false_node = mock.MagicMock()
++        mock_create.return_value = mock.MagicMock()
++
++        mock_flow_task = mock.MagicMock()
++        mock_flow_task._condition = mock.MagicMock(return_value=False)
++        mock_flow_task._on_true = mock_true_node
++        mock_flow_task._on_true_data = None
++        mock_flow_task._on_true_seed = None
++        mock_flow_task._on_false = mock_false_node
++        mock_flow_task._on_false_data = None
++        mock_flow_task._on_false_seed = None
++
++        mock_process = mock.MagicMock()
++
++        task = mock.MagicMock()
++        task.status = STATUS.NEW
++        task.process = mock.MagicMock()
++        task.process.coerced = mock_process
++        task.flow_task = mock_flow_task
++        task.data = {}
++
++        activation = IfActivation(task)
++
++        activation.activate()
++        self.assertFalse(activation._condition_result)
++
++        task.status = STATUS.DONE
++        list(activation.create_next())
++
++        mock_false_node._create.assert_called_once()
++        mock_true_node._create.assert_not_called()
