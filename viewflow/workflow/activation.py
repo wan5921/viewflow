@@ -205,6 +205,7 @@ class Activation:
         task.seed = seed
         task.save()
         task.previous.add(prev_activation.task)
+        print(f"[ACTIVATION CREATE] Token: {token}, Process ID: {prev_activation.process.pk}")
         return cls(task)
 
     @status.transition(source=STATUS.NEW)
