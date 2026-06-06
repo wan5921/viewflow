@@ -1,0 +1,94 @@
+diff --git a/viewflow/fsm/base.py b/viewflow/fsm/base.py
+index 6b4d2a1..db343f0 100644
+--- a/viewflow/fsm/base.py
++++ b/viewflow/fsm/base.py
+@@ -11,6 +11,7 @@ from __future__ import annotations
+ 
+ import inspect
+ from typing import Any, Dict, Mapping, Iterable, List, Type, Optional
++from viewflow.authorization import AuthorizationMixin, has_permission
+ from viewflow.this_object import ThisObject
+ from viewflow.utils import DEFAULT, MARKER
+ from .typing import (
+@@ -87,19 +88,21 @@ class Transition:
+         ]
+         return all(map(lambda condition: condition(instance), conditions))
+ 
+-    def has_perm(self, instance: object, user: UserModel) -> bool:
++    def has_permission(self, instance: object, user: UserModel) -> bool:
+         """Checks if the given user has permission to perform this transition."""
+         if self.permission is DEFAULT:
+-            return False  # Protected by default
++            return False
+         if self.permission is None:
+-            return True  # Explicitly allowed to any
+-        elif callable(self.permission):
++            return True
++        if callable(self.permission):
+             return self.permission(instance, user)
+-        elif isinstance(self.permission, ThisObject):
++        if isinstance(self.permission, ThisObject):
+             permission = self.permission.resolve(instance)
+-            return permission(user)  # type: ignore
+-        else:
+-            raise ValueError(f"Unknown permission type {type(self.permission)}")
++            return has_permission(user, permission)
++        return has_permission(user, self.permission)
++
++    def has_perm(self, instance: object, user: UserModel) -> bool:
++        return self.has_permission(instance, user)
+ 
+ 
+ class TransitionMethod:
+@@ -135,7 +138,7 @@ class TransitionMethod:
+         return self._func.__name__
+ 
+ 
+-class TransitionBoundMethod:
++class TransitionBoundMethod(AuthorizationMixin):
+     """Instance method wrapper that performs the transition."""
+ 
+     do_not_call_in_templates = True
+@@ -208,13 +211,6 @@ class TransitionBoundMethod:
+             return transition.conditions_met(self._instance)
+         return False
+ 
+-    def has_perm(self, user: UserModel) -> bool:
+-        current_state = self._state.get(self._instance)
+-        transition = self._descriptor.get_transition(current_state)
+-        if transition:
+-            return transition.has_perm(self._instance, user)
+-        return False
+-
+     @property
+     def label(self) -> str:
+         """Transition human-readable label."""
+@@ -352,7 +348,7 @@ class StateDescriptor:
+             transition
+             for transition in self.get_outgoing_transitions(state)
+             if transition.conditions_met(flow)
+-            if transition.has_perm(flow, user)
++            if transition.has_permission(flow, user)
+         ]
+ 
+ 
+diff --git a/viewflow/fsm/typing.py b/viewflow/fsm/typing.py
+index bdc1d8b..2dd8761 100644
+--- a/viewflow/fsm/typing.py
++++ b/viewflow/fsm/typing.py
+@@ -5,6 +5,7 @@
+ # LICENSE_EXCEPTION and the Commercial license defined in file 'COMM_LICENSE',
+ # which is part of this source code package.
+ 
++from collections.abc import Iterable
+ from typing import Callable, Any, List, Union, Mapping, TYPE_CHECKING
+ from viewflow.this_object import ThisObject
+ 
+@@ -14,6 +15,6 @@ if TYPE_CHECKING:
+ UserModel = Any
+ StateValue = Any
+ Condition = Union[ThisObject, Callable[[object], bool]]
+-Permission = Union[ThisObject, Callable[[object, Any], bool]]
++Permission = Union[str, Iterable[str], ThisObject, Callable[[object, Any], Any]]
+ StateTransitions = Mapping["TransitionMethod", List["Transition"]]
+ TransitionFunction = Callable[..., Any]
