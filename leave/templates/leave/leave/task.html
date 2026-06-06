@@ -1,0 +1,11 @@
+{% extends 'viewflow/workflow/task.html' %}
+{% load i18n %}
+
+{% block form %}
+  <section class="vf-card__form">
+    <div><strong>{% trans 'Applicant' %}:</strong> {{ process.applicant }}</div>
+    <div><strong>{% trans 'Days' %}:</strong> {{ process.days }}</div>
+    <div><strong>{% trans 'Reason' %}:</strong> {{ process.reason|linebreaksbr }}</div>
+  </section>
+  {{ block.super }}
+{% endblock %}

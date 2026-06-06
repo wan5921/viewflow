@@ -31,6 +31,7 @@ ALLOWED_HOSTS = [env.str('DOMAIN_NAME')]
 
 INSTALLED_APPS = [
     'tests.apps.TestsConfig',
+    'leave.apps.LeaveConfig',
     'viewflow',
     'viewflow.workflow',
 
@@ -55,7 +56,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = None
+ROOT_URLCONF = 'leave.urls'
 
 TEMPLATES = [
     {
@@ -101,6 +102,7 @@ MIGRATION_MODULES = {
     'guardian': None,
     'helloworld': None,
     'bloodtest': None,
+    'leave': None,
 }
 
 # Internationalization
