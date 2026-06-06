@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import inspect
 from typing import Any, Dict, Mapping, Iterable, List, Type, Optional
+from viewflow.authorization import AuthorizationMixin, has_permission
 from viewflow.this_object import ThisObject
 from viewflow.utils import DEFAULT, MARKER
 from .typing import (
@@ -90,16 +91,17 @@ class Transition:
     def has_perm(self, instance: object, user: UserModel) -> bool:
         """Checks if the given user has permission to perform this transition."""
         if self.permission is DEFAULT:
-            return False  # Protected by default
+            return False
         if self.permission is None:
-            return True  # Explicitly allowed to any
-        elif callable(self.permission):
+            return True
+        if callable(self.permission):
             return self.permission(instance, user)
-        elif isinstance(self.permission, ThisObject):
+        if isinstance(self.permission, ThisObject):
             permission = self.permission.resolve(instance)
             return permission(user)  # type: ignore
-        else:
-            raise ValueError(f"Unknown permission type {type(self.permission)}")
+        if isinstance(self.permission, str):
+            return has_permission(user, self.permission)
+        raise ValueError(f"Unknown permission type {type(self.permission)}")
 
 
 class TransitionMethod:
@@ -135,7 +137,7 @@ class TransitionMethod:
         return self._func.__name__
 
 
-class TransitionBoundMethod:
+class TransitionBoundMethod(AuthorizationMixin):
     """Instance method wrapper that performs the transition."""
 
     do_not_call_in_templates = True
@@ -208,13 +210,6 @@ class TransitionBoundMethod:
             return transition.conditions_met(self._instance)
         return False
 
-    def has_perm(self, user: UserModel) -> bool:
-        current_state = self._state.get(self._instance)
-        transition = self._descriptor.get_transition(current_state)
-        if transition:
-            return transition.has_perm(self._instance, user)
-        return False
-
     @property
     def label(self) -> str:
         """Transition human-readable label."""
@@ -229,8 +224,7 @@ class TransitionBoundMethod:
                 return self._func.__name__.title()
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        with TransitionBoundMethod.Wrapper(self, kwargs=kwargs):
-            return self._func(self._instance, *args, **kwargs)
+        return self.perform(*args, **kwargs)
 
     def get_transitions(self) -> Iterable[Transition]:
         return self._descriptor.get_transitions()

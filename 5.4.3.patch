@@ -1,21 +1,107 @@
-diff --git a/viewflow/workflow/activation.py b/viewflow/workflow/activation.py
-index 7f493e7..f01aec7 100644
---- a/viewflow/workflow/activation.py
-+++ b/viewflow/workflow/activation.py
-@@ -7,6 +7,7 @@ from django.db import connection, transaction
- from django.utils.timezone import now
+diff --git a/5.4.3.patch b/5.4.3.patch
+index 15d625b..e69de29 100644
+--- a/5.4.3.patch
++++ b/5.4.3.patch
+@@ -1,21 +0,0 @@
+-diff --git a/viewflow/workflow/activation.py b/viewflow/workflow/activation.py
+-index 7f493e7..f01aec7 100644
+---- a/viewflow/workflow/activation.py
+-+++ b/viewflow/workflow/activation.py
+-@@ -7,6 +7,7 @@ from django.db import connection, transaction
+- from django.utils.timezone import now
+- 
+- from viewflow import fsm
+-+from viewflow.authorization import AuthorizationMixin
+- from .context import context
+- from .signals import task_finished, task_failed
+- from .status import STATUS, PROCESS
+-@@ -76,7 +77,7 @@ def has_manage_permission(activation: "Activation", user: Any) -> bool:
+-     return activation.flow_class.instance.has_manage_permission(user)
+- 
+- 
+--class Activation:
+-+class Activation(AuthorizationMixin):
+-     """
+-     Base class for flow task activations.
+- 
+diff --git a/viewflow/fsm/base.py b/viewflow/fsm/base.py
+index 6b4d2a1..d91d639 100644
+--- a/viewflow/fsm/base.py
++++ b/viewflow/fsm/base.py
+@@ -11,6 +11,7 @@ from __future__ import annotations
  
- from viewflow import fsm
-+from viewflow.authorization import AuthorizationMixin
- from .context import context
- from .signals import task_finished, task_failed
- from .status import STATUS, PROCESS
-@@ -76,7 +77,7 @@ def has_manage_permission(activation: "Activation", user: Any) -> bool:
-     return activation.flow_class.instance.has_manage_permission(user)
+ import inspect
+ from typing import Any, Dict, Mapping, Iterable, List, Type, Optional
++from viewflow.authorization import AuthorizationMixin, has_permission
+ from viewflow.this_object import ThisObject
+ from viewflow.utils import DEFAULT, MARKER
+ from .typing import (
+@@ -90,16 +91,17 @@ class Transition:
+     def has_perm(self, instance: object, user: UserModel) -> bool:
+         """Checks if the given user has permission to perform this transition."""
+         if self.permission is DEFAULT:
+-            return False  # Protected by default
++            return False
+         if self.permission is None:
+-            return True  # Explicitly allowed to any
+-        elif callable(self.permission):
++            return True
++        if callable(self.permission):
+             return self.permission(instance, user)
+-        elif isinstance(self.permission, ThisObject):
++        if isinstance(self.permission, ThisObject):
+             permission = self.permission.resolve(instance)
+             return permission(user)  # type: ignore
+-        else:
+-            raise ValueError(f"Unknown permission type {type(self.permission)}")
++        if isinstance(self.permission, str):
++            return has_permission(user, self.permission)
++        raise ValueError(f"Unknown permission type {type(self.permission)}")
  
  
--class Activation:
-+class Activation(AuthorizationMixin):
-     """
-     Base class for flow task activations.
+ class TransitionMethod:
+@@ -135,7 +137,7 @@ class TransitionMethod:
+         return self._func.__name__
  
+ 
+-class TransitionBoundMethod:
++class TransitionBoundMethod(AuthorizationMixin):
+     """Instance method wrapper that performs the transition."""
+ 
+     do_not_call_in_templates = True
+@@ -208,13 +210,6 @@ class TransitionBoundMethod:
+             return transition.conditions_met(self._instance)
+         return False
+ 
+-    def has_perm(self, user: UserModel) -> bool:
+-        current_state = self._state.get(self._instance)
+-        transition = self._descriptor.get_transition(current_state)
+-        if transition:
+-            return transition.has_perm(self._instance, user)
+-        return False
+-
+     @property
+     def label(self) -> str:
+         """Transition human-readable label."""
+@@ -229,8 +224,7 @@ class TransitionBoundMethod:
+                 return self._func.__name__.title()
+ 
+     def __call__(self, *args: Any, **kwargs: Any) -> Any:
+-        with TransitionBoundMethod.Wrapper(self, kwargs=kwargs):
+-            return self._func(self._instance, *args, **kwargs)
++        return self.perform(*args, **kwargs)
+ 
+     def get_transitions(self) -> Iterable[Transition]:
+         return self._descriptor.get_transitions()
+diff --git a/viewflow/fsm/typing.py b/viewflow/fsm/typing.py
+index bdc1d8b..743ea79 100644
+--- a/viewflow/fsm/typing.py
++++ b/viewflow/fsm/typing.py
+@@ -14,6 +14,6 @@ if TYPE_CHECKING:
+ UserModel = Any
+ StateValue = Any
+ Condition = Union[ThisObject, Callable[[object], bool]]
+-Permission = Union[ThisObject, Callable[[object, Any], bool]]
++Permission = Union[str, ThisObject, Callable[[object, Any], bool]]
+ StateTransitions = Mapping["TransitionMethod", List["Transition"]]
+ TransitionFunction = Callable[..., Any]

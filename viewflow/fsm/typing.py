@@ -14,6 +14,6 @@ if TYPE_CHECKING:
 UserModel = Any
 StateValue = Any
 Condition = Union[ThisObject, Callable[[object], bool]]
-Permission = Union[ThisObject, Callable[[object, Any], bool]]
+Permission = Union[str, ThisObject, Callable[[object, Any], bool]]
 StateTransitions = Mapping["TransitionMethod", List["Transition"]]
 TransitionFunction = Callable[..., Any]
