@@ -1,0 +1,107 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..3c9e996
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,57 @@
++name: CI
++
++on:
++  push:
++    branches: [main]
++  pull_request:
++
++jobs:
++  lint:
++    name: Lint
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: "3.11"
++          cache: pip
++      - name: Install dependencies
++        run: |
++          python -m pip install --upgrade pip
++          pip install flake8 black
++      - name: Run flake8
++        run: flake8 viewflow tests
++      - name: Run black --check
++        run: black --check viewflow tests
++
++  test:
++    name: Django ${{ matrix.django-version }}
++    runs-on: ubuntu-latest
++    strategy:
++      matrix:
++        django-version: ["4.0", "4.1", "4.2"]
++    steps:
++      - uses: actions/checkout@v4
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: "3.11"
++          cache: pip
++      - name: Install dependencies
++        run: |
++          python -m pip install --upgrade pip
++          pip install "Django~=${{ matrix.django-version }}.0"
++          pip install django-filter djangorestframework django-guardian django-environ
++          pip install pytest pytest-django pytest-cov
++      - name: Run tests with coverage
++        run: |
++          pytest --cov=viewflow --cov-report=xml --cov-report=term -v
++        env:
++          DJANGO_SETTINGS_MODULE: tests.settings
++      - name: Upload coverage to Codecov
++        uses: codecov/codecov-action@v4
++        with:
++          token: ${{ secrets.CODECOV_TOKEN }}
++          file: ./coverage.xml
++          fail_ci_if_error: false
+\ No newline at end of file
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+index 0000000..9db0aef
+--- /dev/null
++++ b/Dockerfile
+@@ -0,0 +1,21 @@
++FROM python:3.11-slim
++
++ENV PYTHONDONTWRITEBYTECODE=1
++ENV PYTHONUNBUFFERED=1
++
++RUN apt-get update && apt-get install -y --no-install-recommends \
++    gcc \
++    libpq-dev \
++    && rm -rf /var/lib/apt/lists/*
++
++WORKDIR /app
++
++COPY setup.py /app/
++RUN pip install --no-cache-dir gunicorn && \
++    pip install --no-cache-dir -e .
++
++COPY . /app/
++
++EXPOSE 8000
++
++CMD ["gunicorn", "viewflow_demo.wsgi", "--bind", "0.0.0.0:8000"]
+\ No newline at end of file
+diff --git a/README.md b/README.md
+index 0263472..ce18d17 100644
+--- a/README.md
++++ b/README.md
+@@ -207,8 +207,8 @@ modifications of Viewflow. You can find the commercial license terms in
+ 
+ 
+ 
+-[build]: https://img.shields.io/github/actions/workflow/status/viewflow/viewflow/django.yml?branch=main
+-[coverage]: https://img.shields.io/coveralls/github/viewflow/viewflow/v2
++[build]: https://img.shields.io/github/actions/workflow/status/viewflow/viewflow/ci.yml?branch=main
++[coverage]: https://img.shields.io/codecov/c/github/viewflow/viewflow?branch=main
+ [travis-svg]: https://travis-ci.org/viewflow/viewflow.svg
+ [travis]: https://travis-ci.org/viewflow/viewflow
+ [pypi]: https://pypi.org/project/django-viewflow/
