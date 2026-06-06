@@ -7,6 +7,7 @@ from django.db import connection, transaction
 from django.utils.timezone import now
 
 from viewflow import fsm
+from viewflow.authorization import AuthorizationMixin
 from .context import context
 from .signals import task_finished, task_failed
 from .status import STATUS, PROCESS
@@ -66,6 +67,10 @@ def has_manage_permission(activation: "Activation", user: Any) -> bool:
     """
     Check if the user has manage permission.
 
+    This standalone function is maintained for backward compatibility
+    as a permission parameter in @status.transition decorators.
+    It delegates to the AuthorizationMixin.has_manage_permission method.
+
     Args:
         activation (Activation): The current activation instance.
         user (Any): The user instance.
@@ -73,15 +78,19 @@ def has_manage_permission(activation: "Activation", user: Any) -> bool:
     Returns:
         bool: True if the user has manage permission, False otherwise.
     """
-    return activation.flow_class.instance.has_manage_permission(user)
+    return activation.has_manage_permission(user)
 
 
-class Activation:
+class Activation(AuthorizationMixin):
     """
     Base class for flow task activations.
 
     Activation is responsible for flow task state management and persistence.
     Each activation status change is restricted by a simple finite state automaton.
+
+    AuthorizationMixin provides has_permission() and has_manage_permission()
+    methods for permission checking, as well as perform() for executing
+    transitions with permission validation.
     """
 
     status: fsm.State = fsm.State(STATUS, default=STATUS.NEW)
