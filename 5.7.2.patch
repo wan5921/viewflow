@@ -1,0 +1,324 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..6ea2874
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,126 @@
++name: CI
++
++on:
++  push:
++    branches:
++      - main
++  pull_request:
++
++permissions:
++  contents: read
++  id-token: write
++
++jobs:
++  lint:
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout repository
++        uses: actions/checkout@v4
++
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: '3.10'
++          cache: pip
++          cache-dependency-path: |
++            .github/workflows/ci.yml
++            setup.py
++            tox.ini
++
++      - name: Install lint dependencies
++        run: |
++          python -m pip install --upgrade pip
++          python -m pip install black==24.1.1 flake8==7.0.0
++
++      - name: Run flake8
++        run: flake8 .
++
++      - name: Run black --check
++        run: black --check .
++
++  test:
++    runs-on: ubuntu-latest
++    strategy:
++      fail-fast: false
++      matrix:
++        include:
++          - django-version: '4.0'
++            django-spec: 'Django>=4.0,<4.1'
++          - django-version: '4.1'
++            django-spec: 'Django>=4.1,<4.2'
++          - django-version: '4.2'
++            django-spec: 'Django>=4.2,<4.3'
++
++    steps:
++      - name: Checkout repository
++        uses: actions/checkout@v4
++
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: '3.10'
++          cache: pip
++          cache-dependency-path: |
++            .github/workflows/ci.yml
++            setup.py
++            tox.ini
++
++      - name: Install test dependencies
++        run: |
++          python -m pip install --upgrade pip
++          python -m pip install --no-cache-dir --no-deps -e .
++          python -m pip install \
++            "${{ matrix.django-spec }}" \
++            django-filter==24.3 \
++            drf-spectacular==0.27.2 \
++            djangorestframework==3.15.2 \
++            pyyaml==6.0.1 \
++            uritemplate==4.1.1 \
++            celery==5.4.0 \
++            dash==2.17.1 \
++            django-allauth==64.0.0 \
++            django-celery-beat==2.1.0 \
++            django-formtools==2.5.1 \
++            django-guardian==2.4.0 \
++            django-import-export==3.3.6 \
++            django-polymodels==1.8.0 \
++            django-redis==5.4.0 \
++            django-reversion==5.0.12 \
++            django-simple-history==3.4.0 \
++            django-money==3.5.3 \
++            dj-database-url==2.1.0 \
++            django_sendmail_backend==0.1.2 \
++            django-countries==7.6.1 \
++            django-environ==0.11.2 \
++            django-extensions==3.2.3 \
++            graphene-django==3.2.0 \
++            django-tz-detect==0.4.0 \
++            html2text==2020.1.16 \
++            html5lib==1.1 \
++            ipython==8.23.0 \
++            numpy==1.26.3 \
++            openapi-schema-validator==0.6.2 \
++            pandas==2.2.0 \
++            pillow==10.2.0 \
++            psycopg2-binary==2.9.9 \
++            pywatchman==1.4.1 \
++            watchdog==4.0.1 \
++            requests==2.31.0 \
++            selenium==4.17.2 \
++            sentry-sdk==1.16.0 \
++            tblib==3.0.0 \
++            hiredis==3.0.0 \
++            pytest==8.3.2 \
++            pytest-django==4.8.0 \
++            pytest-cov==5.0.0
++
++      - name: Run pytest
++        run: pytest -m "not selenium and not integration" --cov=viewflow --cov-report=xml --cov-report=term
++
++      - name: Upload coverage to Codecov
++        uses: codecov/codecov-action@v5
++        with:
++          files: ./coverage.xml
++          flags: django-${{ matrix.django-version }}
++          name: django-${{ matrix.django-version }}
++          use_oidc: true
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+index 0000000..0334ac1
+--- /dev/null
++++ b/Dockerfile
+@@ -0,0 +1,16 @@
++FROM python:3.11-slim
++
++ENV PYTHONDONTWRITEBYTECODE=1 \
++    PYTHONUNBUFFERED=1 \
++    DJANGO_SETTINGS_MODULE=viewflow_demo.settings
++
++WORKDIR /app
++
++COPY . .
++
++RUN python -m pip install --upgrade pip \
++    && python -m pip install --no-cache-dir . gunicorn
++
++EXPOSE 8000
++
++CMD ["gunicorn", "--bind", "0.0.0.0:8000", "viewflow_demo.wsgi"]
+diff --git a/README.md b/README.md
+index 0263472..f736603 100644
+--- a/README.md
++++ b/README.md
+@@ -2,7 +2,7 @@
+ 
+ **The low-code for developers with yesterday's deadline**
+ 
+-[![build]][build] [![coverage]][coverage] [![pypi-version]][pypi] [![py-versions]][pypi]
++[![CI][build-badge]][build] [![Coverage][coverage-badge]][coverage] [![pypi-version]][pypi] [![py-versions]][pypi]
+ 
+ Viewflow is a low-code library for building business applications with Django.
+ It gives you ready-made components for user management, workflows, and
+@@ -207,8 +207,10 @@ modifications of Viewflow. You can find the commercial license terms in
+ 
+ 
+ 
+-[build]: https://img.shields.io/github/actions/workflow/status/viewflow/viewflow/django.yml?branch=main
+-[coverage]: https://img.shields.io/coveralls/github/viewflow/viewflow/v2
++[build-badge]: https://img.shields.io/github/actions/workflow/status/viewflow/viewflow/ci.yml?branch=main&label=CI
++[build]: https://github.com/viewflow/viewflow/actions/workflows/ci.yml
++[coverage-badge]: https://img.shields.io/codecov/c/github/viewflow/viewflow?label=coverage
++[coverage]: https://codecov.io/gh/viewflow/viewflow
+ [travis-svg]: https://travis-ci.org/viewflow/viewflow.svg
+ [travis]: https://travis-ci.org/viewflow/viewflow
+ [pypi]: https://pypi.org/project/django-viewflow/
+diff --git a/conftest.py b/conftest.py
+new file mode 100644
+index 0000000..7c3ab91
+--- /dev/null
++++ b/conftest.py
+@@ -0,0 +1,13 @@
++def pytest_collection_modifyitems(items):
++    for item in items:
++        tags = set()
++        obj = getattr(item, "obj", None)
++        cls = getattr(item, "cls", None)
++
++        if obj is not None:
++            tags.update(getattr(obj, "tags", set()))
++        if cls is not None:
++            tags.update(getattr(cls, "tags", set()))
++
++        for tag in tags:
++            item.add_marker(tag)
+diff --git a/pytest.ini b/pytest.ini
+new file mode 100644
+index 0000000..9c3c773
+--- /dev/null
++++ b/pytest.ini
+@@ -0,0 +1,5 @@
++[pytest]
++DJANGO_SETTINGS_MODULE = tests.settings
++markers =
++    integration: integration tests
++    selenium: selenium-driven tests
+diff --git a/setup.py b/setup.py
+index aa7cda1..8590347 100644
+--- a/setup.py
++++ b/setup.py
+@@ -15,7 +15,7 @@ setuptools.setup(
+     # long_description=README,
+     long_description_content_type="text/markdown",
+     long_description=README,
+-    packages=setuptools.find_packages(exclude=["tests*"]),
++    packages=setuptools.find_packages(exclude=["tests*", "viewflow_demo*"]),
+     python_requires=">=3.10",
+     zip_safe=False,
+     classifiers=[
+diff --git a/viewflow_demo/__init__.py b/viewflow_demo/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/viewflow_demo/settings.py b/viewflow_demo/settings.py
+new file mode 100644
+index 0000000..3f83101
+--- /dev/null
++++ b/viewflow_demo/settings.py
+@@ -0,0 +1,60 @@
++import os
++from pathlib import Path
++
++BASE_DIR = Path(__file__).resolve().parent.parent
++
++SECRET_KEY = os.environ.get("SECRET_KEY", "viewflow-demo-secret-key")
++DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
++ALLOWED_HOSTS = [host for host in os.environ.get("ALLOWED_HOSTS", "*").split(",") if host]
++
++INSTALLED_APPS = [
++    "django.contrib.admin",
++    "django.contrib.auth",
++    "django.contrib.contenttypes",
++    "django.contrib.sessions",
++    "django.contrib.messages",
++    "django.contrib.staticfiles",
++    "viewflow",
++]
++
++MIDDLEWARE = [
++    "django.middleware.security.SecurityMiddleware",
++    "django.contrib.sessions.middleware.SessionMiddleware",
++    "django.middleware.common.CommonMiddleware",
++    "django.middleware.csrf.CsrfViewMiddleware",
++    "django.contrib.auth.middleware.AuthenticationMiddleware",
++    "django.contrib.messages.middleware.MessageMiddleware",
++    "django.middleware.clickjacking.XFrameOptionsMiddleware",
++]
++
++ROOT_URLCONF = "viewflow_demo.urls"
++WSGI_APPLICATION = "viewflow_demo.wsgi.application"
++
++TEMPLATES = [
++    {
++        "BACKEND": "django.template.backends.django.DjangoTemplates",
++        "DIRS": [],
++        "APP_DIRS": True,
++        "OPTIONS": {
++            "context_processors": [
++                "django.template.context_processors.request",
++                "django.contrib.auth.context_processors.auth",
++                "django.contrib.messages.context_processors.messages",
++            ],
++        },
++    }
++]
++
++DATABASES = {
++    "default": {
++        "ENGINE": "django.db.backends.sqlite3",
++        "NAME": BASE_DIR / "db.sqlite3",
++    }
++}
++
++LANGUAGE_CODE = "en-us"
++TIME_ZONE = "UTC"
++USE_I18N = True
++USE_TZ = True
++STATIC_URL = "static/"
++DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+diff --git a/viewflow_demo/urls.py b/viewflow_demo/urls.py
+new file mode 100644
+index 0000000..33fba6f
+--- /dev/null
++++ b/viewflow_demo/urls.py
+@@ -0,0 +1,13 @@
++from django.contrib import admin
++from django.http import HttpResponse
++from django.urls import path
++
++
++def index(_request):
++    return HttpResponse("Viewflow demo is running.")
++
++
++urlpatterns = [
++    path("", index),
++    path("admin/", admin.site.urls),
++]
+diff --git a/viewflow_demo/wsgi.py b/viewflow_demo/wsgi.py
+new file mode 100644
+index 0000000..85d20e1
+--- /dev/null
++++ b/viewflow_demo/wsgi.py
+@@ -0,0 +1,7 @@
++import os
++
++from django.core.wsgi import get_wsgi_application
++
++os.environ.setdefault("DJANGO_SETTINGS_MODULE", "viewflow_demo.settings")
++
++application = get_wsgi_application()
