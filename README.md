@@ -2,7 +2,7 @@
 
 **The low-code for developers with yesterday's deadline**
 
-[![CI][build-badge]][build] [![Coverage][coverage-badge]][coverage] [![pypi-version]][pypi] [![py-versions]][pypi]
+[![build]][build] [![coverage]][coverage] [![pypi-version]][pypi] [![py-versions]][pypi]
 
 Viewflow is a low-code library for building business applications with Django.
 It gives you ready-made components for user management, workflows, and
@@ -207,10 +207,8 @@ modifications of Viewflow. You can find the commercial license terms in
 
 
 
-[build-badge]: https://img.shields.io/github/actions/workflow/status/viewflow/viewflow/ci.yml?branch=main&label=CI
-[build]: https://github.com/viewflow/viewflow/actions/workflows/ci.yml
-[coverage-badge]: https://img.shields.io/codecov/c/github/viewflow/viewflow?label=coverage
-[coverage]: https://codecov.io/gh/viewflow/viewflow
+[build]: https://img.shields.io/github/actions/workflow/status/viewflow/viewflow/django.yml?branch=main
+[coverage]: https://img.shields.io/coveralls/github/viewflow/viewflow/v2
 [travis-svg]: https://travis-ci.org/viewflow/viewflow.svg
 [travis]: https://travis-ci.org/viewflow/viewflow
 [pypi]: https://pypi.org/project/django-viewflow/
