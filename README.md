@@ -207,8 +207,8 @@ modifications of Viewflow. You can find the commercial license terms in
 
 
 
-[build]: https://github.com/viewflow/viewflow/actions/workflows/ci.yml/badge.svg
-[coverage]: https://codecov.io/gh/viewflow/viewflow/branch/main/graph/badge.svg
+[build]: https://img.shields.io/github/actions/workflow/status/viewflow/viewflow/django.yml?branch=main
+[coverage]: https://img.shields.io/coveralls/github/viewflow/viewflow/v2
 [travis-svg]: https://travis-ci.org/viewflow/viewflow.svg
 [travis]: https://travis-ci.org/viewflow/viewflow
 [pypi]: https://pypi.org/project/django-viewflow/
