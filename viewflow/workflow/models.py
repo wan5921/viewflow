@@ -237,6 +237,8 @@ class AbstractTask(models.Model):
 class Process(AbstractProcess):
     """Default viewflow Process model."""
 
+    version = models.PositiveIntegerField(default=1, verbose_name=_("Version"))
+
     data = models.JSONField(default=dict, blank=True)
 
     parent_task = models.ForeignKey(

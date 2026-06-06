@@ -1,0 +1,68 @@
+diff --git a/viewflow/workflow/base.py b/viewflow/workflow/base.py
+index 5b4f453..5851b62 100644
+--- a/viewflow/workflow/base.py
++++ b/viewflow/workflow/base.py
+@@ -260,6 +260,8 @@ class Flow(Viewset, metaclass=FlowMetaClass):
+     task_class: Optional[type] = None
+     lock_impl: Any = lock.no_lock
+ 
++    version: int = 1
++
+     process_title: str = ""
+     process_description: str = ""
+     process_summary_template: str = ""
+diff --git a/viewflow/workflow/flow/views/filters.py b/viewflow/workflow/flow/views/filters.py
+index 7bbffff..6c685a2 100644
+--- a/viewflow/workflow/flow/views/filters.py
++++ b/viewflow/workflow/flow/views/filters.py
+@@ -96,7 +96,20 @@ class DashboardTaskListViewFilter(FilterSet):
+ class DashboardProcessListViewFilter(FilterSet):
+     created = DateRangeFilter()
+     finished = NullDateRangeFilter()
++    version = ChoiceFilter()
++
++    def __init__(self, *args, **kwargs):
++        super().__init__(*args, **kwargs)
++        self.filters["version"].field.choices = self._get_version_choices()
++
++    def _get_version_choices(self):
++        versions = (
++            self.queryset.order_by("version")
++            .values_list("version", flat=True)
++            .distinct()
++        )
++        return [(v, str(v)) for v in versions]
+ 
+     class Meta:
+         model = Process
+-        fields = ["status", "created", "finished"]
++        fields = ["status", "created", "finished", "version"]
+diff --git a/viewflow/workflow/models.py b/viewflow/workflow/models.py
+index 591390a..7f326c6 100644
+--- a/viewflow/workflow/models.py
++++ b/viewflow/workflow/models.py
+@@ -237,6 +237,8 @@ class AbstractTask(models.Model):
+ class Process(AbstractProcess):
+     """Default viewflow Process model."""
+ 
++    version = models.PositiveIntegerField(default=1, verbose_name=_("Version"))
++
+     data = models.JSONField(default=dict, blank=True)
+ 
+     parent_task = models.ForeignKey(
+diff --git a/viewflow/workflow/nodes/start.py b/viewflow/workflow/nodes/start.py
+index b808015..00acf7f 100644
+--- a/viewflow/workflow/nodes/start.py
++++ b/viewflow/workflow/nodes/start.py
+@@ -16,7 +16,10 @@ class StartActivation(mixins.NextNodeActivationMixin, Activation):
+     def create(cls, flow_task, prev_activation, token, data=None, seed=None):
+         flow_class = flow_task.flow_class
+ 
+-        process = flow_class.process_class(flow_class=flow_class)
++        process = flow_class.process_class(
++            flow_class=flow_class,
++            version=flow_class.version,
++        )
+         task = flow_class.task_class(
+             flow_task=flow_task,
+             process=process,
