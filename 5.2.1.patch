@@ -1,0 +1,361 @@
+diff --git a/leave/__init__.py b/leave/__init__.py
+new file mode 100644
+index 0000000..b1afb83
+--- /dev/null
++++ b/leave/__init__.py
+@@ -0,0 +1 @@
++default_app_config = 'leave.apps.LeaveConfig'
+diff --git a/leave/apps.py b/leave/apps.py
+new file mode 100644
+index 0000000..f88e3a5
+--- /dev/null
++++ b/leave/apps.py
+@@ -0,0 +1,10 @@
++from django.apps import AppConfig
++from django.utils.translation import gettext_lazy as _
++
++
++class LeaveConfig(AppConfig):
++    name = 'leave'
++    verbose_name = _('请假审批')
++
++    def ready(self):
++        from . import flows
+diff --git a/leave/flows.py b/leave/flows.py
+new file mode 100644
+index 0000000..e90ad9a
+--- /dev/null
++++ b/leave/flows.py
+@@ -0,0 +1,53 @@
++from django.contrib.auth.models import User
++from viewflow import this
++from viewflow.workflow import Flow, flow
++from viewflow.workflow.flow.views import CreateProcessView, UpdateProcessView
++
++from .models import LeaveRequest
++
++
++class LeaveFlow(Flow):
++    """请假审批流程"""
++    process_class = LeaveRequest
++    process_title = "请假申请"
++    process_description = "员工请假审批流程"
++
++    start = (
++        flow.Start(
++            CreateProcessView.as_view(
++                fields=['applicant', 'days', 'reason'],
++                template_name='leave/start_form.html'
++            )
++        )
++        .Next(this.manager_approval)
++    )
++
++    manager_approval = (
++        flow.View(
++            UpdateProcessView.as_view(
++                fields=['manager_approved'],
++                template_name='leave/approval_form.html'
++            )
++        )
++        .Permission('leave.can_approve_manager')
++        .Next(this.manager_decision)
++    )
++
++    manager_decision = (
++        flow.If(lambda activation: activation.process.manager_approved)
++        .Then(this.hr_approval)
++        .Else(this.end)
++    )
++
++    hr_approval = (
++        flow.View(
++            UpdateProcessView.as_view(
++                fields=['hr_approved'],
++                template_name='leave/approval_form.html'
++            )
++        )
++        .Permission('leave.can_approve_hr')
++        .Next(this.end)
++    )
++
++    end = flow.End()
+diff --git a/leave/models.py b/leave/models.py
+new file mode 100644
+index 0000000..c18f5a9
+--- /dev/null
++++ b/leave/models.py
+@@ -0,0 +1,38 @@
++from django.conf import settings
++from django.db import models
++from django.utils.translation import gettext_lazy as _
++
++from viewflow.workflow.models import Process
++
++
++class LeaveRequest(Process):
++    """请假申请模型"""
++    applicant = models.ForeignKey(
++        settings.AUTH_USER_MODEL,
++        on_delete=models.CASCADE,
++        verbose_name=_("申请人"),
++        related_name="leave_requests"
++    )
++    days = models.IntegerField(
++        _("天数"),
++        default=1
++    )
++    reason = models.TextField(
++        _("原因"),
++        blank=True
++    )
++    manager_approved = models.BooleanField(
++        _("经理批准"),
++        default=False
++    )
++    hr_approved = models.BooleanField(
++        _("HR批准"),
++        default=False
++    )
++
++    class Meta:
++        verbose_name = _("请假申请")
++        verbose_name_plural = _("请假申请列表")
++
++    def __str__(self):
++        return f"{self.applicant} - {self.days}天"
+diff --git a/leave/templates/leave/approval_form.html b/leave/templates/leave/approval_form.html
+new file mode 100644
+index 0000000..8903c55
+--- /dev/null
++++ b/leave/templates/leave/approval_form.html
+@@ -0,0 +1,81 @@
++{% extends request.resolver_match.app.base_template_name|default:'viewflow/workflow/base_page.html' %}
++{% load i18n viewflow workflow %}
++
++{% block extrahead %}
++  {{ block.super }}
++  {{ form.media }}
++{% endblock %}
++
++{% block content %}{% with process=request.activation.process task=request.activation.task %}
++  <div class="mdc-layout-grid vf-page__grid">
++    <div class="mdc-layout-grid__inner vf-page__grid-inner">
++      {% block form-cell %}
++        <div class="mdc-layout-grid__cell {% block form-cell-span %}mdc-layout-grid__cell--span-8-desktop mdc-layout-grid__cell--span-8-tablet mdc-layout-grid__cell--span-4-phone{% endblock %}">
++          <div class="mdc-card vf-card">
++            <section class="vf-card__header">
++              {% block form-header-title %}
++                <h1 class="vf-card__title">
++                  {% trans '审批' %} - {{ task.title }}
++                </h1>
++              {% endblock %}
++              {% block form-header-subtitle %}
++                <h2 class="vf-card__breadcrumbs">
++                  {% block breadcrumbs_items %}
++                    <a href="{% reverse viewset 'index' %}">{{ process.flow_class.process_title }}</a>
++                    <a href="{% reverse viewset 'process_detail' process.pk %}">#{{ process.pk }}</a>
++                    <a href="{% reverse request.activation.flow_task 'detail' process.pk task.pk %}">
++                      {{ task.title }} #{{ task.pk}}
++                    </a>
++                    <a>{% trans 'Execute' %}</a>
++                  {% endblock %}
++                </h2>
++              {% endblock %}
++              {% block form-header-menu %}{% endblock %}
++            </section>
++            {% block form %}
++            <vf-form>
++              <form class="vf-form" method="POST" {% if form.is_multipart %} enctype="multipart/form-data"{% endif %}>
++                {% csrf_token %}
++                <section class="vf-card__form">
++                  <div class="vf-form__field">
++                    <label class="vf-form__label">{% trans '申请人' %}</label>
++                    <div class="vf-form__field--text">{{ process.applicant }}</div>
++                  </div>
++                  <div class="vf-form__field">
++                    <label class="vf-form__label">{% trans '天数' %}</label>
++                    <div class="vf-form__field--text">{{ process.days }}</div>
++                  </div>
++                  <div class="vf-form__field">
++                    <label class="vf-form__label">{% trans '原因' %}</label>
++                    <div class="vf-form__field--text">{{ process.reason }}</div>
++                  </div>
++                  {% render form form.layout %}
++                </section>
++                <section class="mdc-card__actions vf-card__actions">
++                  <button class="mdc-button mdc-card__action mdc-card__action--button mdc-button--touch" name='_continue' value="1">
++                    <span class="mdc-button__ripple"></span>
++                    <span class="mdc-button__touch"></span>
++                    <span class="mdc-button__focus-ring"></span>
++                    <span class="mdc-button__label">{% trans 'Execute and continue' %}</span>
++                  </button>
++                  <button class="mdc-button mdc-card__action mdc-card__action--button mdc-button--raised mdc-button--touch">
++                    <span class="mdc-button__ripple"></span>
++                    <span class="mdc-button__touch"></span>
++                    <span class="mdc-button__focus-ring"></span>
++                    <span class="mdc-button__label">{% trans 'Execute' %}</span>
++                  </button>
++                </section>
++              </form>
++            </vf-form>
++            {% endblock %}
++          </div>
++        </div>
++      {% endblock form-cell %}
++      {% block panel-cell %}
++        <div class="mdc-layout-grid__cell {% block panel-cell-span %}mdc-layout-grid__cell--span-4-desktop mdc-layout-grid__cell--span-8-tablet mdc-layout-grid__cell--span-4-phone{% endblock %}">
++          {% include_process_data request.activation.process %}
++        </div>
++      {% endblock panel-cell %}
++    </div>
++  </div>
++{% endwith %}{% endblock content %}
+diff --git a/leave/templates/leave/process_detail.html b/leave/templates/leave/process_detail.html
+new file mode 100644
+index 0000000..bda5a2e
+--- /dev/null
++++ b/leave/templates/leave/process_detail.html
+@@ -0,0 +1,66 @@
++{% extends request.resolver_match.app.base_template_name|default:'viewflow/workflow/base_page.html' %}
++{% load i18n viewflow workflow %}
++
++
++{% block content %}{% with process=view.object %}
++  <div class="mdc-layout-grid vf-page__grid">
++    <div class="mdc-layout-grid__inner vf-page__grid-inner">
++      {% block detail-cell %}
++        <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-8-desktop mdc-layout-grid__cell--span-8-tablet mdc-layout-grid__cell--span-4-phone">
++          <div class="mdc-card vf-card">
++            <section class="vf-card__header">
++              {% block detail-header-title %}
++                <h1 class="vf-card__title">
++                  {{ process }}
++                </h1>
++              {% endblock %}
++              {% block detail-header-subtitle %}
++                <h2 class="vf-card__breadcrumbs">
++                  {% block breadcrumbs_items %}
++                    <a href="{% reverse viewset 'index' %}">{{ process.flow_class.process_title }}</a>
++                    <a>{{ process }}</a>
++                  {% endblock %}
++                </h2>
++              {% endblock %}
++              {% block detail-header-menu %}
++                <div class="vf-card__menu">
++                  {% include 'viewflow/includes/view_action_menu.html' with view=view only %}
++                </div>
++              {% endblock %}
++            </section>
++            <section class="vf-card__body">
++              <div class="vf-form">
++                <div class="vf-form__field">
++                  <label class="vf-form__label">{% trans '申请人' %}</label>
++                  <div class="vf-form__field--text">{{ process.applicant }}</div>
++                </div>
++                <div class="vf-form__field">
++                  <label class="vf-form__label">{% trans '天数' %}</label>
++                  <div class="vf-form__field--text">{{ process.days }}</div>
++                </div>
++                <div class="vf-form__field">
++                  <label class="vf-form__label">{% trans '原因' %}</label>
++                  <div class="vf-form__field--text">{{ process.reason }}</div>
++                </div>
++                <div class="vf-form__field">
++                  <label class="vf-form__label">{% trans '经理批准' %}</label>
++                  <div class="vf-form__field--text">{% if process.manager_approved %}{% trans '是' %}{% else %}{% trans '否' %}{% endif %}</div>
++                </div>
++                <div class="vf-form__field">
++                  <label class="vf-form__label">{% trans 'HR批准' %}</label>
++                  <div class="vf-form__field--text">{% if process.hr_approved %}{% trans '是' %}{% else %}{% trans '否' %}{% endif %}</div>
++                </div>
++              </div>
++            </section>
++          </div>
++          {% include 'viewflow/workflow/process_tasks_list.html' %}
++        </div>
++      {% endblock detail-cell %}
++      {% block panel-cell %}
++        <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-4-desktop mdc-layout-grid__cell--span-8-tablet mdc-layout-grid__cell--span-4-phone">
++          {% include_process_data process %}
++        </div>
++      {% endblock panel-cell %}
++    </div>
++  </div>
++{% endwith %}{% endblock content %}
+diff --git a/leave/templates/leave/start_form.html b/leave/templates/leave/start_form.html
+new file mode 100644
+index 0000000..a4f0a79
+--- /dev/null
++++ b/leave/templates/leave/start_form.html
+@@ -0,0 +1,56 @@
++{% extends request.resolver_match.app.base_template_name|default:'viewflow/workflow/base_page.html' %}
++{% load i18n viewflow %}
++
++
++{% block content %}
++  <div class="mdc-layout-grid vf-page__grid">
++    <div class="mdc-layout-grid__inner">
++      {% block form-cell %}
++        <div class="mdc-layout-grid__cell {% block form-cell-span %}mdc-layout-grid__cell--span-10-desktop mdc-layout-grid__cell--span-8-tablet mdc-layout-grid__cell--span-4-phone{% endblock %}">
++          <div class="mdc-card vf-card">
++            <section class="vf-card__header">
++              {% block form-header-title %}
++                <h1 class="vf-card__title">
++                  {% trans '申请请假' %}
++                </h1>
++              {% endblock %}
++              {% block form-header-subtitle %}
++                <h2 class="vf-card__breadcrumbs">
++                  {% block breadcrumbs_items %}
++                    <a href="{% reverse viewset 'index' %}">{{ request.activation.flow_class.process_title }}</a>
++                    <a>{% trans 'Start' %}</a>
++                  {% endblock %}
++                </h2>
++              {% endblock %}
++              {% block form-header-menu %}{% endblock %}
++            </section>
++            {% block form %}
++              <vf-form>
++                <form class="vf-form" method="POST" {% if form.is_multipart %} enctype="multipart/form-data"{% endif %}>
++                  {% csrf_token %}
++                  <section class="vf-card__form">
++                    {% if view.layout %}{% render form view.layout %}{% else %}{% render form form.layout %}{% endif %}
++                  </section>
++                  <section class="mdc-card__actions vf-card__actions">
++                    <button class="mdc-button mdc-card__action mdc-card__action--button mdc-button--touch" name='_continue' value="1">
++                      <span class="mdc-button__ripple"></span>
++                      <span class="mdc-button__touch"></span>
++                      <span class="mdc-button__focus-ring"></span>
++                      <span class="mdc-button__label">{% trans 'Start and continue' %}</span>
++                    </button>
++                    <button class="mdc-button mdc-card__action mdc-card__action--button mdc-button--raised mdc-button--touch">
++                      <span class="mdc-button__ripple"></span>
++                      <span class="mdc-button__touch"></span>
++                      <span class="mdc-button__focus-ring"></span>
++                      <span class="mdc-button__label">{% trans 'Start' %}</span>
++                    </button>
++                  </section>
++                </form>
++              </vf-form>
++            {% endblock form %}
++          </div>
++        </div>
++      {% endblock form-cell %}
++    </div>
++  </div>
++{% endblock content %}
+diff --git a/leave/urls.py b/leave/urls.py
+new file mode 100644
+index 0000000..8693f51
+--- /dev/null
++++ b/leave/urls.py
+@@ -0,0 +1,8 @@
++from django.urls import path, include
++from viewflow.workflow import flow
++from .flows import LeaveFlow
++
++
++urlpatterns = [
++    path('', flow.FlowAppViewset(LeaveFlow).urls),
++]
