@@ -1,0 +1,27 @@
+diff --git a/viewflow/workflow/activation.py b/viewflow/workflow/activation.py
+index 7f493e7..75eed41 100644
+--- a/viewflow/workflow/activation.py
++++ b/viewflow/workflow/activation.py
+@@ -205,6 +205,7 @@ class Activation:
+         task.seed = seed
+         task.save()
+         task.previous.add(prev_activation.task)
++        print(f"[create_task] token={token}, owner_process_id={getattr(prev_activation.process, 'pk', None)}")
+         return cls(task)
+ 
+     @status.transition(source=STATUS.NEW)
+diff --git a/viewflow/workflow/nodes/join.py b/viewflow/workflow/nodes/join.py
+index 6e63e51..195dd7c 100644
+--- a/viewflow/workflow/nodes/join.py
++++ b/viewflow/workflow/nodes/join.py
+@@ -118,7 +118,9 @@ class JoinActivation(mixins.NextNodeActivationMixin, Activation):
+ 
+         active_tasks = self.flow_class.task_class._default_manager.filter(
+             process=self.process, token__startswith=join_token_prefix
+-        ).exclude(status__in=[STATUS.DONE, STATUS.CANCELED, STATUS.REVIVED])
++        ).exclude(
++            status__in=[STATUS.DONE, STATUS.CANCELED, STATUS.REVIVED]
++        ).exclude(pk=self.task.pk)
+ 
+         if self.flow_task._continue_on_condition:
+             continue_result = self.flow_task._continue_on_condition(self, active_tasks)

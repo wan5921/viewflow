@@ -118,7 +118,9 @@ class JoinActivation(mixins.NextNodeActivationMixin, Activation):
 
         active_tasks = self.flow_class.task_class._default_manager.filter(
             process=self.process, token__startswith=join_token_prefix
-        ).exclude(status__in=[STATUS.DONE, STATUS.CANCELED, STATUS.REVIVED])
+        ).exclude(
+            status__in=[STATUS.DONE, STATUS.CANCELED, STATUS.REVIVED]
+        ).exclude(pk=self.task.pk)
 
         if self.flow_task._continue_on_condition:
             continue_result = self.flow_task._continue_on_condition(self, active_tasks)
