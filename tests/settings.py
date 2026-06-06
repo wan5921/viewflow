@@ -31,6 +31,7 @@ ALLOWED_HOSTS = [env.str('DOMAIN_NAME')]
 
 INSTALLED_APPS = [
     'tests.apps.TestsConfig',
+    'leave.apps.LeaveConfig',
     'viewflow',
     'viewflow.workflow',
 
