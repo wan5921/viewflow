@@ -14,19 +14,13 @@ from viewflow.workflow.token import Token
 def import_flow_by_ref(flow_strref):
     """Return flow class by flow string reference."""
     try:
-        parts = flow_strref.split("/")
-        app_label = parts[0]
-        flow_path = parts[1]
+        app_label, flow_path = flow_strref.split("/")
     except ValueError:
         warnings.warn(
             f"Input string must be in the format 'app_label/flow_path'. Got {flow_strref}",
             UserWarning,
         )
         return None
-
-    # Check for version in flow_path
-    if "@" in flow_path:
-        flow_path, _ = flow_path.split("@")  # We don't need version for import
 
     flow_class = import_string("{}.{}".format(get_app_package(app_label), flow_path))
     assert issubclass(flow_class, Flow)
@@ -46,8 +40,6 @@ def get_flow_ref(flow_class):
         )
 
     subpath = module[len(app_package) + 1 :]
-    if hasattr(flow_class, "version") and flow_class.version > 1:
-        return "{}/{}@{}".format(app_label, subpath, flow_class.version)
     return "{}/{}".format(app_label, subpath)
 
 
@@ -63,10 +55,6 @@ def import_task_by_ref(task_strref):
             UserWarning,
         )
         return None
-
-    # Check for version in flow_path
-    if "@" in flow_path:
-        flow_path, _ = flow_path.split("@")
 
     flow_class = import_string("{}.{}".format(get_app_package(app_label), flow_path))
     assert issubclass(flow_class, Flow)
@@ -89,12 +77,9 @@ def get_task_ref(flow_task):
         )
 
     subpath = module[len(app_package) + 1 :]
-    flow_class_part = "{}.{}".format(subpath, flow_task.flow_class.__name__)
-    if hasattr(flow_task.flow_class, "version") and flow_task.flow_class.version > 1:
-        flow_class_part += "@{}".format(flow_task.flow_class.version)
 
-    return "{}/{}.{}".format(
-        app_label, flow_class_part, flow_task.name
+    return "{}/{}.{}.{}".format(
+        app_label, subpath, flow_task.flow_class.__name__, flow_task.name
     )
 
 
