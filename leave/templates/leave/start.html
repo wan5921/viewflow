@@ -1,0 +1,45 @@
+{% extends request.resolver_match.app.base_template_name|default:'viewflow/workflow/base_page.html' %}
+{% load i18n viewflow %}
+
+
+{% block content %}
+  <div class="mdc-layout-grid vf-page__grid">
+    <div class="mdc-layout-grid__inner">
+      <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10-desktop mdc-layout-grid__cell--span-8-tablet mdc-layout-grid__cell--span-4-phone">
+        <div class="mdc-card vf-card">
+          <section class="vf-card__header">
+            <h1 class="vf-card__title">
+              {% trans 'New Leave Request' %}
+            </h1>
+            <h2 class="vf-card__breadcrumbs">
+              <a href="{% reverse viewset 'index' %}">{{ request.activation.flow_class.process_title }}</a>
+              <a>{% trans 'Start' %}</a>
+            </h2>
+          </section>
+          <vf-form>
+            <form class="vf-form" method="POST" {% if form.is_multipart %} enctype="multipart/form-data"{% endif %}>
+              {% csrf_token %}
+              <section class="vf-card__form">
+                {% if view.layout %}{% render form view.layout %}{% else %}{% render form form.layout %}{% endif %}
+              </section>
+              <section class="mdc-card__actions vf-card__actions">
+                <button class="mdc-button mdc-card__action mdc-card__action--button mdc-button--touch" name='_continue' value="1">
+                  <span class="mdc-button__ripple"></span>
+                  <span class="mdc-button__touch"></span>
+                  <span class="mdc-button__focus-ring"></span>
+                  <span class="mdc-button__label">{% trans 'Submit and continue' %}</span>
+                </button>
+                <button class="mdc-button mdc-card__action mdc-card__action--button mdc-button--raised mdc-button--touch">
+                  <span class="mdc-button__ripple"></span>
+                  <span class="mdc-button__touch"></span>
+                  <span class="mdc-button__focus-ring"></span>
+                  <span class="mdc-button__label">{% trans 'Submit' %}</span>
+                </button>
+              </section>
+            </form>
+          </vf-form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock content %}

@@ -30,6 +30,7 @@ ALLOWED_HOSTS = [env.str('DOMAIN_NAME')]
 # Application definition
 
 INSTALLED_APPS = [
+    'leave',
     'tests.apps.TestsConfig',
     'viewflow',
     'viewflow.workflow',
@@ -101,6 +102,7 @@ MIGRATION_MODULES = {
     'guardian': None,
     'helloworld': None,
     'bloodtest': None,
+    'leave': None,
 }
 
 # Internationalization
