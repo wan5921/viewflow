@@ -2,8 +2,6 @@
 
 **The low-code for developers with yesterday's deadline**
 
-[![CI](https://github.com/viewflow/viewflow/actions/workflows/ci.yml/badge.svg)](https://github.com/viewflow/viewflow/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/viewflow/viewflow/branch/main/graph/badge.svg)](https://codecov.io/gh/viewflow/viewflow)
 [![build]][build] [![coverage]][coverage] [![pypi-version]][pypi] [![py-versions]][pypi]
 
 Viewflow is a low-code library for building business applications with Django.
