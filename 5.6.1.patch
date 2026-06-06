@@ -1,0 +1,21 @@
+diff --git a/setup.cfg b/setup.cfg
+index c0dce78..b6256fc 100644
+--- a/setup.cfg
++++ b/setup.cfg
+@@ -11,5 +11,15 @@ max-line-length = 130
+ ignore = D100, D105, D107, W503, E203
+ extend-ignore = W503
+ 
++[coverage:run]
++source = viewflow
++omit =
++    */migrations/*
++    */tests/*
++
+ [coverage:report]
+-omit = ../*migrations*
++omit =
++    */migrations/*
++    */tests/*
++show_missing = True
++skip_covered = False
