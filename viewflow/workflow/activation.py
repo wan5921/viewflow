@@ -7,7 +7,6 @@ from django.db import connection, transaction
 from django.utils.timezone import now
 
 from viewflow import fsm
-from viewflow.authorization import AuthorizationMixin
 from .context import context
 from .signals import task_finished, task_failed
 from .status import STATUS, PROCESS
@@ -77,7 +76,7 @@ def has_manage_permission(activation: "Activation", user: Any) -> bool:
     return activation.flow_class.instance.has_manage_permission(user)
 
 
-class Activation(AuthorizationMixin):
+class Activation:
     """
     Base class for flow task activations.
 
