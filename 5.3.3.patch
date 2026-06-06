@@ -1,0 +1,43 @@
+diff --git a/viewflow/workflow/activation.py b/viewflow/workflow/activation.py
+index 7f493e7..f58ae2b 100644
+--- a/viewflow/workflow/activation.py
++++ b/viewflow/workflow/activation.py
+@@ -195,6 +195,7 @@ class Activation:
+         Returns:
+             Activation: The newly created activation instance.
+         """
++        print(f"token: {token}, owner_process_id: {prev_activation.process.id}")
+         flow_class = flow_task.flow_class
+         task = flow_class.task_class(
+             process=prev_activation.process,
+diff --git a/viewflow/workflow/nodes/split.py b/viewflow/workflow/nodes/split.py
+index a325676..001410d 100644
+--- a/viewflow/workflow/nodes/split.py
++++ b/viewflow/workflow/nodes/split.py
+@@ -25,6 +25,10 @@ class SplitActivation(Activation):
+         for node, cond, data_source in self.flow_task._branches:
+             if cond and not cond(self):
+                 continue
++            
++            if data_source:
++                for item in data_source(self):
++                    self.next_tasks.append((node, item))
+             else:
+                 self.next_tasks.append((node, None))
+ 
+@@ -125,13 +129,13 @@ class Split(
+     def _branches(self):
+         return self._activate_next
+ 
+-    def Next(self, node, case=None):
++    def Next(self, node, case=None, data_source=None):
+         """Node to activate if condition is true.
+ 
+         :param cond: Callable[activation] -> bool
+ 
+         """
+-        self._activate_next.append((node, case, None))
++        self._activate_next.append((node, case, data_source))
+         return self
+ 
+     def Always(self, node):

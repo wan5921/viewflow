@@ -195,6 +195,7 @@ class Activation:
         Returns:
             Activation: The newly created activation instance.
         """
+        print(f"token: {token}, owner_process_id: {prev_activation.process.id}")
         flow_class = flow_task.flow_class
         task = flow_class.task_class(
             process=prev_activation.process,
