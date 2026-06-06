@@ -15,7 +15,7 @@ setuptools.setup(
     # long_description=README,
     long_description_content_type="text/markdown",
     long_description=README,
-    packages=setuptools.find_packages(exclude=["tests*"]),
+    packages=setuptools.find_packages(exclude=["tests*", "viewflow_demo*"]),
     python_requires=">=3.10",
     zip_safe=False,
     classifiers=[
