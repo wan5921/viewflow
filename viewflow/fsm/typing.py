@@ -5,7 +5,6 @@
 # LICENSE_EXCEPTION and the Commercial license defined in file 'COMM_LICENSE',
 # which is part of this source code package.
 
-from collections.abc import Iterable
 from typing import Callable, Any, List, Union, Mapping, TYPE_CHECKING
 from viewflow.this_object import ThisObject
 
@@ -15,6 +14,6 @@ if TYPE_CHECKING:
 UserModel = Any
 StateValue = Any
 Condition = Union[ThisObject, Callable[[object], bool]]
-Permission = Union[str, Iterable[str], ThisObject, Callable[[object, Any], Any]]
+Permission = Union[ThisObject, Callable[[object, Any], bool]]
 StateTransitions = Mapping["TransitionMethod", List["Transition"]]
 TransitionFunction = Callable[..., Any]
