@@ -25,13 +25,12 @@ class SplitActivation(Activation):
         for node, cond, data_source in self.flow_task._branches:
             if cond and not cond(self):
                 continue
+
+            if data_source:
+                for data in data_source(self):
+                    self.next_tasks.append((node, data))
             else:
                 self.next_tasks.append((node, None))
-
-        if not self.next_tasks:
-            raise FlowRuntimeError(
-                "No next task available for {}".format(self.flow_task.name)
-            )
 
     @Activation.status.super()
     def create_next(self):
@@ -46,7 +45,7 @@ class SplitActivation(Activation):
             (task, data) for task, data in self.next_tasks if not isinstance(task, Join)
         ] + [(task, data) for task, data in self.next_tasks if isinstance(task, Join)]
 
-        for n, (next_task, data) in enumerate(next_tasks, 1):
+        for next_task, data in next_tasks:
             yield next_task._create(
                 prev_activation=self, token=next(token_source), data=data
             )
@@ -125,17 +124,16 @@ class Split(
     def _branches(self):
         return self._activate_next
 
-    def Next(self, node, case=None):
+    def Next(self, node, case=None, data_source=None):
         """Node to activate if condition is true.
 
         :param cond: Callable[activation] -> bool
-
         """
-        self._activate_next.append((node, case, None))
+        self._activate_next.append((node, case, data_source))
         return self
 
-    def Always(self, node):
-        return self.Next(node)
+    def Always(self, node, data_source=None):
+        return self.Next(node, data_source=data_source)
 
 
 class SplitFirstActivation(SplitActivation):

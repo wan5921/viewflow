@@ -1,0 +1,143 @@
+diff --git a/tests/workflow/test_nodes__join.py b/tests/workflow/test_nodes__join.py
+index 5460cf9..bd24b6f 100644
+--- a/tests/workflow/test_nodes__join.py
++++ b/tests/workflow/test_nodes__join.py
+@@ -31,6 +31,47 @@ class Test(TestCase):  # noqa: D101
+         self.assertEqual(process.status, STATUS.DONE)
+         self.assertEqual(process.task_set.count(), 6)
+ 
++    def test_split_data_source_creates_parallel_tasks(self):
++        process = TestSplitDataSourceWorkflow.start.run()
++
++        branch_tasks = process.task_set.filter(flow_task=TestSplitDataSourceWorkflow.branch)
++
++        self.assertEqual(branch_tasks.count(), 3)
++        self.assertEqual(
++            process.task_set.filter(flow_task=TestSplitDataSourceWorkflow.join).count(),
++            0,
++        )
++        self.assertEqual(process.task_set.count(), 5)
++
++    def test_join_waits_for_all_split_data_source_tasks(self):
++        process = TestSplitDataSourceWorkflow.start.run()
++        branch_tasks = list(
++            process.task_set.filter(flow_task=TestSplitDataSourceWorkflow.branch).order_by(
++                "pk"
++            )
++        )
++
++        self.assertEqual(len(branch_tasks), 3)
++
++        TestSplitDataSourceWorkflow.branch.run(branch_tasks[0])
++        join_task = process.task_set.get(flow_task=TestSplitDataSourceWorkflow.join)
++        self.assertEqual(join_task.status, STATUS.STARTED)
++        self.assertEqual(join_task.previous.count(), 1)
++
++        TestSplitDataSourceWorkflow.branch.run(branch_tasks[1])
++        join_task.refresh_from_db()
++        self.assertEqual(join_task.status, STATUS.STARTED)
++        self.assertEqual(join_task.previous.count(), 2)
++
++        TestSplitDataSourceWorkflow.branch.run(branch_tasks[2])
++        join_task.refresh_from_db()
++        self.assertEqual(join_task.status, STATUS.DONE)
++        self.assertEqual(join_task.previous.count(), 3)
++
++        process.refresh_from_db()
++        self.assertEqual(process.status, STATUS.DONE)
++        self.assertEqual(process.task_set.count(), 7)
++
+ 
+ class TestSyncWorkflow(flow.Flow):  # noqa: D101
+     start = flow.StartHandle().Next(this.split)
+@@ -70,3 +111,21 @@ class TestASyncWorkflow(flow.Flow):  # noqa: D101
+ 
+     def handler(self, activation):
+         pass
++
++
++class TestSplitDataSourceWorkflow(flow.Flow):  # noqa: D101
++    start = flow.StartHandle().Next(this.split)
++
++    split = flow.Split().Next(this.branch, data_source=this.branch_items)
++
++    branch = flow.Handle(this.handler).Next(this.join)
++
++    join = flow.Join().Next(this.end)
++
++    end = flow.End()
++
++    def branch_items(self, activation):
++        return [{"index": 1}, {"index": 2}, {"index": 3}]
++
++    def handler(self, activation):
++        pass
+diff --git a/viewflow/workflow/activation.py b/viewflow/workflow/activation.py
+index 7f493e7..92ae32c 100644
+--- a/viewflow/workflow/activation.py
++++ b/viewflow/workflow/activation.py
+@@ -204,6 +204,10 @@ class Activation:
+         task.data = data if data is not None else {}
+         task.seed = seed
+         task.save()
++        owner_process_id = getattr(prev_activation.process, "owner_process_id", None)
++        if owner_process_id is None:
++            owner_process_id = task.process_id
++        print(f"create_task token={task.token} owner_process_id={owner_process_id}")
+         task.previous.add(prev_activation.task)
+         return cls(task)
+ 
+diff --git a/viewflow/workflow/nodes/split.py b/viewflow/workflow/nodes/split.py
+index a325676..02fa7b1 100644
+--- a/viewflow/workflow/nodes/split.py
++++ b/viewflow/workflow/nodes/split.py
+@@ -25,14 +25,13 @@ class SplitActivation(Activation):
+         for node, cond, data_source in self.flow_task._branches:
+             if cond and not cond(self):
+                 continue
++
++            if data_source:
++                for data in data_source(self):
++                    self.next_tasks.append((node, data))
+             else:
+                 self.next_tasks.append((node, None))
+ 
+-        if not self.next_tasks:
+-            raise FlowRuntimeError(
+-                "No next task available for {}".format(self.flow_task.name)
+-            )
+-
+     @Activation.status.super()
+     def create_next(self):
+         """Activate next tasks for parallel execution.
+@@ -46,7 +45,7 @@ class SplitActivation(Activation):
+             (task, data) for task, data in self.next_tasks if not isinstance(task, Join)
+         ] + [(task, data) for task, data in self.next_tasks if isinstance(task, Join)]
+ 
+-        for n, (next_task, data) in enumerate(next_tasks, 1):
++        for next_task, data in next_tasks:
+             yield next_task._create(
+                 prev_activation=self, token=next(token_source), data=data
+             )
+@@ -125,17 +124,16 @@ class Split(
+     def _branches(self):
+         return self._activate_next
+ 
+-    def Next(self, node, case=None):
++    def Next(self, node, case=None, data_source=None):
+         """Node to activate if condition is true.
+ 
+         :param cond: Callable[activation] -> bool
+-
+         """
+-        self._activate_next.append((node, case, None))
++        self._activate_next.append((node, case, data_source))
+         return self
+ 
+-    def Always(self, node):
+-        return self.Next(node)
++    def Always(self, node, data_source=None):
++        return self.Next(node, data_source=data_source)
+ 
+ 
+ class SplitFirstActivation(SplitActivation):

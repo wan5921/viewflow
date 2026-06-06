@@ -204,6 +204,10 @@ class Activation:
         task.data = data if data is not None else {}
         task.seed = seed
         task.save()
+        owner_process_id = getattr(prev_activation.process, "owner_process_id", None)
+        if owner_process_id is None:
+            owner_process_id = task.process_id
+        print(f"create_task token={task.token} owner_process_id={owner_process_id}")
         task.previous.add(prev_activation.task)
         return cls(task)
 
