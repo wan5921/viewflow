@@ -1,0 +1,107 @@
+diff --git a/viewflow/workflow/base.py b/viewflow/workflow/base.py
+index 5b4f453..7c66625 100644
+--- a/viewflow/workflow/base.py
++++ b/viewflow/workflow/base.py
+@@ -264,6 +264,7 @@ class Flow(Viewset, metaclass=FlowMetaClass):
+     process_description: str = ""
+     process_summary_template: str = ""
+     process_result_template: str = ""
++    version: int = 1
+ 
+     def __init_subclass__(cls, **kwargs: Any) -> None:
+         """
+diff --git a/viewflow/workflow/fields.py b/viewflow/workflow/fields.py
+index d0ed45d..8eb6471 100644
+--- a/viewflow/workflow/fields.py
++++ b/viewflow/workflow/fields.py
+@@ -14,7 +14,9 @@ from viewflow.workflow.token import Token
+ def import_flow_by_ref(flow_strref):
+     """Return flow class by flow string reference."""
+     try:
+-        app_label, flow_path = flow_strref.split("/")
++        parts = flow_strref.split("/")
++        app_label = parts[0]
++        flow_path = parts[1]
+     except ValueError:
+         warnings.warn(
+             f"Input string must be in the format 'app_label/flow_path'. Got {flow_strref}",
+@@ -22,6 +24,10 @@ def import_flow_by_ref(flow_strref):
+         )
+         return None
+ 
++    # Check for version in flow_path
++    if "@" in flow_path:
++        flow_path, _ = flow_path.split("@")  # We don't need version for import
++
+     flow_class = import_string("{}.{}".format(get_app_package(app_label), flow_path))
+     assert issubclass(flow_class, Flow)
+     return flow_class
+@@ -40,6 +46,8 @@ def get_flow_ref(flow_class):
+         )
+ 
+     subpath = module[len(app_package) + 1 :]
++    if hasattr(flow_class, "version") and flow_class.version > 1:
++        return "{}/{}@{}".format(app_label, subpath, flow_class.version)
+     return "{}/{}".format(app_label, subpath)
+ 
+ 
+@@ -56,6 +64,10 @@ def import_task_by_ref(task_strref):
+         )
+         return None
+ 
++    # Check for version in flow_path
++    if "@" in flow_path:
++        flow_path, _ = flow_path.split("@")
++
+     flow_class = import_string("{}.{}".format(get_app_package(app_label), flow_path))
+     assert issubclass(flow_class, Flow)
+     return flow_class.instance.node(task_name)
+@@ -77,9 +89,12 @@ def get_task_ref(flow_task):
+         )
+ 
+     subpath = module[len(app_package) + 1 :]
++    flow_class_part = "{}.{}".format(subpath, flow_task.flow_class.__name__)
++    if hasattr(flow_task.flow_class, "version") and flow_task.flow_class.version > 1:
++        flow_class_part += "@{}".format(flow_task.flow_class.version)
+ 
+-    return "{}/{}.{}.{}".format(
+-        app_label, subpath, flow_task.flow_class.__name__, flow_task.name
++    return "{}/{}.{}".format(
++        app_label, flow_class_part, flow_task.name
+     )
+ 
+ 
+diff --git a/viewflow/workflow/flow/views/filters.py b/viewflow/workflow/flow/views/filters.py
+index 7bbffff..20b6387 100644
+--- a/viewflow/workflow/flow/views/filters.py
++++ b/viewflow/workflow/flow/views/filters.py
+@@ -4,6 +4,7 @@ from django_filters import (
+     FilterSet,
+     ModelChoiceFilter as BaseModelChoiceFilter,
+     MultipleChoiceFilter,
++    NumberFilter,
+ )
+ 
+ from viewflow.this_object import this
+@@ -96,7 +97,8 @@ class DashboardTaskListViewFilter(FilterSet):
+ class DashboardProcessListViewFilter(FilterSet):
+     created = DateRangeFilter()
+     finished = NullDateRangeFilter()
++    version = NumberFilter()
+ 
+     class Meta:
+         model = Process
+-        fields = ["status", "created", "finished"]
++        fields = ["status", "version", "created", "finished"]
+diff --git a/viewflow/workflow/models.py b/viewflow/workflow/models.py
+index 591390a..6e147e8 100644
+--- a/viewflow/workflow/models.py
++++ b/viewflow/workflow/models.py
+@@ -20,6 +20,7 @@ class AbstractProcess(models.Model):
+     """Base class for Process data object."""
+ 
+     flow_class = FlowReferenceField(_("Flow"))
++    version = models.IntegerField(_("Version"), default=1)
+     status = models.CharField(
+         _("Status"),
+         choices=status.PROCESS.choices,

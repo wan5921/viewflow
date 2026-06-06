@@ -4,6 +4,7 @@ from django_filters import (
     FilterSet,
     ModelChoiceFilter as BaseModelChoiceFilter,
     MultipleChoiceFilter,
+    NumberFilter,
 )
 
 from viewflow.this_object import this
@@ -96,7 +97,8 @@ class DashboardTaskListViewFilter(FilterSet):
 class DashboardProcessListViewFilter(FilterSet):
     created = DateRangeFilter()
     finished = NullDateRangeFilter()
+    version = NumberFilter()
 
     class Meta:
         model = Process
-        fields = ["status", "created", "finished"]
+        fields = ["status", "version", "created", "finished"]

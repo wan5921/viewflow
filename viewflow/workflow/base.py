@@ -264,6 +264,7 @@ class Flow(Viewset, metaclass=FlowMetaClass):
     process_description: str = ""
     process_summary_template: str = ""
     process_result_template: str = ""
+    version: int = 1
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """
