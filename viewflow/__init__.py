@@ -11,6 +11,7 @@ from django.conf import settings as django_settings
 from .conf import settings
 from .this_object import this
 from .utils import viewprop, Icon, DEFAULT
+from .authorization import has_permission, AuthorizationMixin
 
 __title__ = "Django-Viewflow"
 __version__ = "2.0a2"
@@ -18,7 +19,7 @@ __author__ = "Mikhail Podgurskiy"
 __license__ = "AGPL"
 __copyright__ = "Copyright 2018-2021 Mikhail Podgurskiy"
 
-__all__ = ("this", "viewprop", "Icon", "DEFAULT")
+__all__ = ("this", "viewprop", "Icon", "DEFAULT", "has_permission", "AuthorizationMixin")
 
 default_app_config = "viewflow.apps.ViewflowConfig"
 

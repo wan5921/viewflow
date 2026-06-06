@@ -1,5 +1,6 @@
 from typing import Any, Callable, Dict, Optional
 from viewflow import this
+from viewflow.authorization import AuthorizationMixin
 
 from ..activation import Activation
 from ..status import STATUS
@@ -53,7 +54,7 @@ class NextNodeMixin(object):
             yield Edge(src=self, dst=self._next, edge_class="next")
 
 
-class NodePermissionMixin(object):
+class NodePermissionMixin(AuthorizationMixin):
     """Node mixin to restrict access using django permissions."""
 
     _owner = None

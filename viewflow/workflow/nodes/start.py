@@ -2,6 +2,7 @@ from django.utils.timezone import now
 
 from viewflow import this
 from viewflow.utils import is_owner
+from viewflow.authorization import has_permission as auth_has_permission
 from ..base import Node
 from ..activation import Activation, leading_tasks_canceled, has_manage_permission
 from ..status import STATUS, PROCESS

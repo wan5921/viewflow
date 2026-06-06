@@ -2,6 +2,7 @@ from django.utils.timezone import now
 
 from viewflow import this
 from viewflow.utils import is_owner
+from viewflow.authorization import has_permission as auth_has_permission
 from ..base import Node
 from ..activation import Activation, has_manage_permission
 from ..status import STATUS
@@ -270,8 +271,8 @@ class View(
         if is_owner(task.owner, user):
             return True
 
-        # User have flow management permissions
-        return self.flow_class.instance.has_manage_permission(user)
+        # User have flow management permissions (using AuthorizationMixin)
+        return self.check_manage_permission(user)
 
     """
     TODO: Reassign

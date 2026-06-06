@@ -1,0 +1,76 @@
+diff --git a/viewflow/__init__.py b/viewflow/__init__.py
+index 82ddc45..cb9bf39 100644
+--- a/viewflow/__init__.py
++++ b/viewflow/__init__.py
+@@ -11,6 +11,7 @@ from django.conf import settings as django_settings
+ from .conf import settings
+ from .this_object import this
+ from .utils import viewprop, Icon, DEFAULT
++from .authorization import has_permission, AuthorizationMixin
+ 
+ __title__ = "Django-Viewflow"
+ __version__ = "2.0a2"
+@@ -18,7 +19,7 @@ __author__ = "Mikhail Podgurskiy"
+ __license__ = "AGPL"
+ __copyright__ = "Copyright 2018-2021 Mikhail Podgurskiy"
+ 
+-__all__ = ("this", "viewprop", "Icon", "DEFAULT")
++__all__ = ("this", "viewprop", "Icon", "DEFAULT", "has_permission", "AuthorizationMixin")
+ 
+ default_app_config = "viewflow.apps.ViewflowConfig"
+ 
+diff --git a/viewflow/workflow/nodes/mixins.py b/viewflow/workflow/nodes/mixins.py
+index 3b83b00..2b9df5b 100644
+--- a/viewflow/workflow/nodes/mixins.py
++++ b/viewflow/workflow/nodes/mixins.py
+@@ -1,5 +1,6 @@
+ from typing import Any, Callable, Dict, Optional
+ from viewflow import this
++from viewflow.authorization import AuthorizationMixin
+ 
+ from ..activation import Activation
+ from ..status import STATUS
+@@ -53,7 +54,7 @@ class NextNodeMixin(object):
+             yield Edge(src=self, dst=self._next, edge_class="next")
+ 
+ 
+-class NodePermissionMixin(object):
++class NodePermissionMixin(AuthorizationMixin):
+     """Node mixin to restrict access using django permissions."""
+ 
+     _owner = None
+diff --git a/viewflow/workflow/nodes/start.py b/viewflow/workflow/nodes/start.py
+index b808015..6aee01b 100644
+--- a/viewflow/workflow/nodes/start.py
++++ b/viewflow/workflow/nodes/start.py
+@@ -2,6 +2,7 @@ from django.utils.timezone import now
+ 
+ from viewflow import this
+ from viewflow.utils import is_owner
++from viewflow.authorization import has_permission as auth_has_permission
+ from ..base import Node
+ from ..activation import Activation, leading_tasks_canceled, has_manage_permission
+ from ..status import STATUS, PROCESS
+diff --git a/viewflow/workflow/nodes/view.py b/viewflow/workflow/nodes/view.py
+index a4a2460..835f422 100644
+--- a/viewflow/workflow/nodes/view.py
++++ b/viewflow/workflow/nodes/view.py
+@@ -2,6 +2,7 @@ from django.utils.timezone import now
+ 
+ from viewflow import this
+ from viewflow.utils import is_owner
++from viewflow.authorization import has_permission as auth_has_permission
+ from ..base import Node
+ from ..activation import Activation, has_manage_permission
+ from ..status import STATUS
+@@ -270,8 +271,8 @@ class View(
+         if is_owner(task.owner, user):
+             return True
+ 
+-        # User have flow management permissions
+-        return self.flow_class.instance.has_manage_permission(user)
++        # User have flow management permissions (using AuthorizationMixin)
++        return self.check_manage_permission(user)
+ 
+     """
+     TODO: Reassign
